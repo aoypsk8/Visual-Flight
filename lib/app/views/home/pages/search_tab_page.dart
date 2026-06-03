@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' hide Size;
 import '../../../controllers/search_controller.dart';
@@ -165,33 +166,27 @@ class SearchTabPage extends StatelessWidget {
                       ),
                     ),
                     const Spacer(),
-                    _SearchTabBottomPanel(
-                      layout: layout,
-                      child: Obx(
-                        () => Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SearchRouteCard(
-                              from: ctrl.from.value,
-                              to: ctrl.to.value,
-                              loadingFrom: ctrl.loadingLocation.value,
-                              step: ctrl.routeUxStep,
-                              routeLabel: ctrl.routeSummaryLabel,
-                              fromIsCurrentLocation: ctrl.fromIsCurrentLocation,
-                              distanceKm: ctrl.routeDistanceKm,
-                              flightDuration: ctrl.routeFlightDuration,
-                              onFromTap: () => ctrl.pickAirport(isFrom: true),
-                              onToTap: () => ctrl.pickAirport(isFrom: false),
-                              onSwap: ctrl.swap,
-                            ),
-                            SizedBox(height: layout.sectionGap),
-                            _PrimaryActionButton(
-                              step: ctrl.routeUxStep,
-                              layout: layout,
-                              onTap: ctrl.onPrimaryAction,
-                            ),
-                          ],
+                    Obx(
+                      () => _CollapsibleRoutePanel(
+                        layout: layout,
+                        buildRouteCard: (onHide) => SearchRouteCard(
+                          from: ctrl.from.value,
+                          to: ctrl.to.value,
+                          loadingFrom: ctrl.loadingLocation.value,
+                          step: ctrl.routeUxStep,
+                          routeLabel: ctrl.routeSummaryLabel,
+                          fromIsCurrentLocation: ctrl.fromIsCurrentLocation,
+                          distanceKm: ctrl.routeDistanceKm,
+                          flightDuration: ctrl.routeFlightDuration,
+                          onFromTap: () => ctrl.pickAirport(isFrom: true),
+                          onToTap: () => ctrl.pickAirport(isFrom: false),
+                          onSwap: ctrl.swap,
+                          onCollapse: onHide,
+                        ),
+                        actionButton: _PrimaryActionButton(
+                          step: ctrl.routeUxStep,
+                          layout: layout,
+                          onTap: ctrl.onPrimaryAction,
                         ),
                       ),
                     ),
@@ -263,15 +258,79 @@ class _SearchTabHeader extends StatelessWidget {
   }
 }
 
-class _SearchTabBottomPanel extends StatelessWidget {
-  const _SearchTabBottomPanel({required this.layout, required this.child});
+/// Route card expands from / collapses into the airplane FAB (bottom-right).
+class _CollapsibleRoutePanel extends StatefulWidget {
+  const _CollapsibleRoutePanel({
+    required this.layout,
+    required this.buildRouteCard,
+    required this.actionButton,
+  });
 
   final _SearchTabLayout layout;
-  final Widget child;
+  final Widget Function(VoidCallback onHide) buildRouteCard;
+  final Widget actionButton;
+
+  @override
+  State<_CollapsibleRoutePanel> createState() => _CollapsibleRoutePanelState();
+}
+
+class _CollapsibleRoutePanelState extends State<_CollapsibleRoutePanel>
+    with SingleTickerProviderStateMixin {
+  static const _duration = Duration(milliseconds: 400);
+
+  late final AnimationController _controller;
+  late final Animation<double> _reveal;
+  late final Animation<double> _cardScale;
+
+  bool get _expanded =>
+      _controller.status != AnimationStatus.dismissed &&
+      _controller.value > 0.01;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: _duration);
+    _reveal = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
+    _cardScale = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeOutBack,
+        reverseCurve: Curves.easeInCubic,
+      ),
+    );
+    _fabOpacity = ReverseAnimation(_reveal);
+    _controller.value = 1;
+  }
+
+  late final Animation<double> _fabOpacity;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _hide() {
+    if (!_expanded) return;
+    HapticFeedback.selectionClick();
+    _controller.reverse();
+  }
+
+  void _show() {
+    if (_expanded) return;
+    HapticFeedback.selectionClick();
+    _controller.forward();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final content = Align(
+    final layout = widget.layout;
+
+    return Align(
       alignment: Alignment.bottomCenter,
       child: ConstrainedBox(
         constraints: BoxConstraints(
@@ -284,15 +343,113 @@ class _SearchTabBottomPanel extends StatelessWidget {
             layout.horizontalInset,
             layout.bottomClearance,
           ),
-          child: child,
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.bottomRight,
+            children: [
+              IgnorePointer(
+                ignoring: !_expanded,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ClipRect(
+                      child: Align(
+                        alignment: Alignment.bottomRight,
+                        heightFactor: 1,
+                        child: ScaleTransition(
+                          scale: _cardScale,
+                          alignment: Alignment.bottomRight,
+                          child: FadeTransition(
+                            opacity: _reveal,
+                            child: widget.buildRouteCard(_hide),
+                          ),
+                        ),
+                      ),
+                    ),
+                    ClipRect(
+                      child: Align(
+                        alignment: Alignment.bottomCenter,
+                        heightFactor: 1,
+                        child: SizeTransition(
+                          sizeFactor: _reveal,
+                          axisAlignment: 1,
+                          child: FadeTransition(
+                            opacity: _reveal,
+                            child: Padding(
+                              padding:
+                                  EdgeInsets.only(top: layout.sectionGap),
+                              child: widget.actionButton,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              FadeTransition(
+                opacity: _fabOpacity,
+                child: IgnorePointer(
+                  ignoring: _expanded,
+                  child: _RoutePanelAirplaneToggle(onTap: _show),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
+  }
+}
 
-    return Flexible(
-      child: SingleChildScrollView(
-        physics: const ClampingScrollPhysics(),
-        child: content,
+/// Circular show/hide control — airplane icon, bottom-right.
+class _RoutePanelAirplaneToggle extends StatelessWidget {
+  const _RoutePanelAirplaneToggle({required this.onTap});
+
+  final VoidCallback onTap;
+
+  static const double size = 52;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Show route panel',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: Ink(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xE0131519),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.14),
+                width: 1.2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.4),
+                  blurRadius: 18,
+                  offset: const Offset(0, 6),
+                ),
+                BoxShadow(
+                  color: AppColors.amber.withValues(alpha: 0.22),
+                  blurRadius: 14,
+                ),
+              ],
+            ),
+            child: Icon(
+              Icons.flight_rounded,
+              size: 24,
+              color: AppColors.amber.withValues(alpha: 0.9),
+            ),
+          ),
+        ),
       ),
     );
   }

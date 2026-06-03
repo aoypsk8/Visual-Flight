@@ -8,6 +8,16 @@ final class AppAssets {
   static const String animations = 'assets/animations';
   static const String lottie = 'assets/lottie';
   static const String translations = 'assets/translations';
+  static const String ui = 'assets/UI';
+}
+
+/// Live flight & landing reference photography.
+final class AppUiAssets {
+  AppUiAssets._();
+
+  static const String liveWindow = '${AppAssets.ui}/live.jpg';
+  static const String liveTail = '${AppAssets.ui}/live.jpg';
+  static const String finishedFlight = '${AppAssets.ui}/finishedFlight.jpg';
 }
 
 /// Seat selection screen — airplane background (PNG in [AppAssets.images]).

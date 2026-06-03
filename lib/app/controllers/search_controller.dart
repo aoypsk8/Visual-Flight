@@ -501,12 +501,19 @@ class FlightSearchController extends GetxController {
     final origin = from.value!;
     final dest = to.value!;
     HapticFeedback.mediumImpact();
+    final (originLat, originLng) = _originCoords()!;
     Get.to(
       () => SeatSelectionView(
         fromCode: origin.code,
         fromCity: origin.city,
         toCode: dest.code,
         toCity: dest.city,
+        distanceKm: routeDistanceKm,
+        flightDuration: routeFlightDuration,
+        fromLat: originLat,
+        fromLng: originLng,
+        toLat: dest.lat,
+        toLng: dest.lng,
       ),
     );
   }

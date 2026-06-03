@@ -1,21 +1,29 @@
-import 'dart:ui' show ImageFilter;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/app_resources.dart';
 import '../../utils/app_theme.dart';
+import '../../utils/flight_route_utils.dart';
 import '../../widgets/common/app_text.dart';
+import '../boarding/boarding_pass_view.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Dimensions
 // ─────────────────────────────────────────────────────────────────────────────
 
-const _kSeatSz   = 44.0;   // seat tile — larger for readability
+const _kSeatSz   = 44.0;
 const _kSeatGap  = 6.0;
-const _kAisleW   = 38.0;
-const _kWallW    = 18.0;
+const _kAisleW   = 40.0;
+const _kWallW    = 22.0;   // fuselage side wall (windows)
+const _kFuselageMaxW = 400.0;
+
+/// Width of the seat map (walls + 6 seats + aisle).
+double get _kSeatMapWidth =>
+    _kWallW * 2 +
+    _kSeatSz * 6 +
+    _kSeatGap * 4 +
+    _kAisleW;
 const _kBizGap   = 14.0;   // row gap in business
 const _kEcoGap   =  8.0;   // row gap in economy
 
@@ -56,30 +64,17 @@ class _Seat {
   bool get isAisle  => col == 'C' || col == 'D';
   bool get isMiddle => col == 'B' || col == 'E';
 
-  String get typeLabel {
-    if (isBiz) {
-      if (isWindow) return 'Business · Window';
-      if (isAisle)  return 'Business · Aisle';
-      return 'Business · Middle';
-    }
-    if (isWindow) return 'Window seat · Deep Work';
-    if (isAisle)  return 'Aisle seat · Flexible';
-    return 'Middle seat';
+  String get cabinLabel => isBiz ? 'Business' : 'Economy';
+
+  String get positionLabel {
+    if (isWindow) return 'Window';
+    if (isAisle) return 'Aisle';
+    return 'Middle';
   }
 
-  String get typeDesc {
-    if (isBiz)    return 'Premium cabin · Priority boarding · Focus Sprint';
-    if (isWindow) return 'Distraction-free · notifications paused';
-    if (isAisle)  return 'Easy access · full connectivity';
-    return 'Standard experience';
-  }
+  String get typeLabel => '$positionLabel · $cabinLabel';
 
-  String get focusLabel {
-    if (isBiz)    return 'Sprint';
-    if (isWindow) return 'Deep\nWork';
-    if (isAisle)  return 'Flex';
-    return 'Std';
-  }
+  String get typeDesc => 'Row $row';
 }
 
 // Deterministic "random" taken seats — same result every build
@@ -116,41 +111,141 @@ List<_Seat> _buildSeats() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Fuselage nose clipper
+// Fuselage silhouette + deck (aisle carpet, hull walls, wing band)
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _NoseClipper extends CustomClipper<Path> {
-  const _NoseClipper();
+class _FuselageClipper extends CustomClipper<Path> {
+  const _FuselageClipper();
 
   @override
   Path getClip(Size size) {
     final w = size.width;
     final h = size.height;
-    const nH = 110.0; // nose taper height
-    const r  = 24.0;  // bottom corner radius
+    const noseDepth = 128.0;
+    const tailR = 28.0;
 
     return Path()
-      // Nose tip (top-center)
-      ..moveTo(w / 2, 0)
-      // Right nose curve to right side
-      ..quadraticBezierTo(w, 0, w, nH)
-      // Right side down
-      ..lineTo(w, h - r)
-      // Bottom-right corner
-      ..quadraticBezierTo(w, h, w - r, h)
-      // Bottom
-      ..lineTo(r, h)
-      // Bottom-left corner
-      ..quadraticBezierTo(0, h, 0, h - r)
-      // Left side up
-      ..lineTo(0, nH)
-      // Left nose curve back to tip
-      ..quadraticBezierTo(0, 0, w / 2, 0)
+      ..moveTo(w * 0.5, 0)
+      ..cubicTo(w * 0.94, 4, w, noseDepth * 0.42, w, noseDepth)
+      ..lineTo(w, h - tailR)
+      ..quadraticBezierTo(w, h, w - tailR, h)
+      ..lineTo(tailR, h)
+      ..quadraticBezierTo(0, h, 0, h - tailR)
+      ..lineTo(0, noseDepth)
+      ..cubicTo(0, noseDepth * 0.42, w * 0.06, 4, w * 0.5, 0)
       ..close();
   }
 
   @override
-  bool shouldReclip(covariant _NoseClipper old) => false;
+  bool shouldReclip(covariant _FuselageClipper old) => false;
+}
+
+class _FuselageDeckPainter extends CustomPainter {
+  _FuselageDeckPainter({required this.mapWidth});
+
+  final double mapWidth;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final mapLeft = (w - mapWidth) / 2;
+    final aisleLeft = mapLeft + _kWallW + _kSeatSz * 3 + _kSeatGap * 2;
+    final aisleRight = aisleLeft + _kAisleW;
+
+    // Outer hull
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()..color = const Color(0xFF181C24),
+    );
+
+    // Side walls (curved barrel look)
+    final wallPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: const [
+          Color(0xFF353B48),
+          Color(0xFF252A34),
+          Color(0xFF252A34),
+          Color(0xFF353B48),
+        ],
+        stops: const [0.0, 0.12, 0.88, 1.0],
+      ).createShader(Rect.fromLTWH(0, 0, w, h));
+
+    canvas.drawRect(Rect.fromLTRB(0, 0, mapLeft + _kWallW, h), wallPaint);
+    canvas.drawRect(
+      Rect.fromLTRB(mapLeft + mapWidth - _kWallW, 0, w, h),
+      wallPaint,
+    );
+
+    // Center aisle carpet
+    canvas.drawRect(
+      Rect.fromLTRB(aisleLeft, 0, aisleRight, h),
+      Paint()..color = const Color(0xFF2A303A),
+    );
+
+    // Aisle center line (subtle)
+    final linePaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.06)
+      ..strokeWidth = 1;
+    final cx = (aisleLeft + aisleRight) / 2;
+    canvas.drawLine(Offset(cx, 0), Offset(cx, h), linePaint);
+
+    // Seat deck panels (left / right blocks)
+    final deckPaint = Paint()..color = const Color(0xFF1E232C);
+    canvas.drawRect(
+      Rect.fromLTRB(mapLeft + _kWallW, 0, aisleLeft, h),
+      deckPaint,
+    );
+    canvas.drawRect(
+      Rect.fromLTRB(aisleRight, 0, mapLeft + mapWidth - _kWallW, h),
+      deckPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _FuselageDeckPainter old) =>
+      old.mapWidth != mapWidth;
+}
+
+class _WingBandPainter extends CustomPainter {
+  const _WingBandPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final wingPaint = Paint()..color = const Color(0xFF3D4554).withValues(alpha: 0.55);
+
+    // Wing shadow trapezoids on both sides
+    final leftWing = Path()
+      ..moveTo(0, h * 0.15)
+      ..lineTo(w * 0.22, h * 0.35)
+      ..lineTo(w * 0.22, h * 0.65)
+      ..lineTo(0, h * 0.85)
+      ..close();
+    final rightWing = Path()
+      ..moveTo(w, h * 0.15)
+      ..lineTo(w * 0.78, h * 0.35)
+      ..lineTo(w * 0.78, h * 0.65)
+      ..lineTo(w, h * 0.85)
+      ..close();
+    canvas.drawPath(leftWing, wingPaint);
+    canvas.drawPath(rightWing, wingPaint);
+
+    // Wing box across fuselage
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(w * 0.08, h * 0.38, w * 0.84, h * 0.24),
+        const Radius.circular(6),
+      ),
+      Paint()..color = const Color(0xFF4A5568).withValues(alpha: 0.35),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 // Full-screen airplane photo + dark scrim for legible UI on top
@@ -166,19 +261,21 @@ class _SeatPlaneBackground extends StatelessWidget {
           kSeatAirplaneBgAsset,
           fit: BoxFit.cover,
           alignment: Alignment.center,
-          errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF080A0D)),
+          filterQuality: FilterQuality.medium,
+          errorBuilder: (_, _, _) => const ColoredBox(color: Color(0xFF080A0D)),
         ),
+        // Light scrim — keeps seats readable without hiding the photo
         DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                const Color(0xFF050608).withValues(alpha: 0.72),
-                const Color(0xFF080A0D).withValues(alpha: 0.88),
-                const Color(0xFF080A0D).withValues(alpha: 0.94),
+                const Color(0xFF080A0D).withValues(alpha: 0.28),
+                const Color(0xFF080A0D).withValues(alpha: 0.48),
+                const Color(0xFF080A0D).withValues(alpha: 0.62),
               ],
-              stops: const [0.0, 0.45, 1.0],
+              stops: const [0.0, 0.5, 1.0],
             ),
           ),
         ),
@@ -196,6 +293,12 @@ class SeatSelectionView extends StatefulWidget {
   final String fromCity;
   final String toCode;
   final String toCity;
+  final double? distanceKm;
+  final Duration? flightDuration;
+  final double? fromLat;
+  final double? fromLng;
+  final double? toLat;
+  final double? toLng;
 
   const SeatSelectionView({
     super.key,
@@ -203,6 +306,12 @@ class SeatSelectionView extends StatefulWidget {
     required this.fromCity,
     required this.toCode,
     required this.toCity,
+    this.distanceKm,
+    this.flightDuration,
+    this.fromLat,
+    this.fromLng,
+    this.toLat,
+    this.toLng,
   });
 
   @override
@@ -260,6 +369,24 @@ class _SeatSelectionViewState extends State<SeatSelectionView>
     _slideCtrl.forward(from: 0);
   }
 
+  void _onContinue() {
+    final seat = _selected;
+    if (seat == null) return;
+    Get.to(() => BoardingPassView(
+          fromCode: widget.fromCode,
+          fromCity: widget.fromCity,
+          toCode: widget.toCode,
+          toCity: widget.toCity,
+          seatCode: seat.code,
+          distanceKm: widget.distanceKm ?? 0,
+          flightDuration: widget.flightDuration ?? Duration.zero,
+          fromLat: widget.fromLat,
+          fromLng: widget.fromLng,
+          toLat: widget.toLat,
+          toLng: widget.toLng,
+        ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final mq = MediaQuery.of(context);
@@ -276,17 +403,29 @@ class _SeatSelectionViewState extends State<SeatSelectionView>
               _SeatHeader(
                 fromCode: widget.fromCode,
                 fromCity: widget.fromCity,
-                toCode:   widget.toCode,
-                toCity:   widget.toCity,
-                topPad:   mq.padding.top,
+                toCode: widget.toCode,
+                toCity: widget.toCity,
+                distanceKm: widget.distanceKm,
+                flightDuration: widget.flightDuration,
+                topPad: mq.padding.top,
               ),
               Expanded(
                 child: SingleChildScrollView(
-                  padding: EdgeInsets.only(bottom: mq.padding.bottom + 250),
-                  child: _CabinBody(
-                    find:      _find,
-                    selected:  _selected,
-                    onSeatTap: _selectSeat,
+                  physics: const BouncingScrollPhysics(
+                    parent: AlwaysScrollableScrollPhysics(),
+                  ),
+                  padding: EdgeInsets.only(
+                    left: 8,
+                    right: 8,
+                    bottom: mq.padding.bottom + 250,
+                  ),
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: _CabinBody(
+                      find: _find,
+                      selected: _selected,
+                      onSeatTap: _selectSeat,
+                    ),
                   ),
                 ),
               ),
@@ -300,6 +439,7 @@ class _SeatSelectionViewState extends State<SeatSelectionView>
               selected:  _selected,
               slideAnim: _slideAnim,
               bottomPad: mq.padding.bottom,
+              onContinue: _onContinue,
             ),
           ),
 
@@ -331,160 +471,159 @@ class _SeatSelectionViewState extends State<SeatSelectionView>
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _SeatHeader extends StatelessWidget {
-  final String fromCode;
-  final String fromCity;
-  final String toCode;
-  final String toCity;
-  final double topPad;
-
   const _SeatHeader({
     required this.fromCode,
     required this.fromCity,
     required this.toCode,
     required this.toCity,
     required this.topPad,
+    this.distanceKm,
+    this.flightDuration,
   });
+
+  final String fromCode;
+  final String fromCity;
+  final String toCode;
+  final String toCity;
+  final double topPad;
+  final double? distanceKm;
+  final Duration? flightDuration;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final hasMeta = distanceKm != null && flightDuration != null;
+    final metaLabel = hasMeta
+        ? '${FlightRouteUtils.formatDistance(distanceKm!)} · '
+            '${FlightRouteUtils.formatDurationCompact(flightDuration!)}'
+        : null;
 
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Container(
-          decoration: BoxDecoration(
-            color: colors.surf1.withValues(alpha: 0.55),
-            border: Border(
-              bottom: BorderSide(color: colors.hair.withValues(alpha: 0.6)),
-            ),
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                colors.surf1.withValues(alpha: 0.75),
-                colors.surf1.withValues(alpha: 0.0),
-              ],
-              stops: const [0.55, 1.0],
-            ),
-          ),
-          padding: EdgeInsets.fromLTRB(20, topPad + 12, 20, 20),
-          child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D0F12).withValues(alpha: 0.88),
+        border: Border(bottom: BorderSide(color: colors.hair)),
+      ),
+      padding: EdgeInsets.fromLTRB(16, topPad + 10, 16, 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Back button — rounded rect
-          GestureDetector(
-            onTap: Get.back,
-            child: Container(
-              width: 40, height: 40,
-              decoration: BoxDecoration(
-                color:        colors.surf2,
-                borderRadius: BorderRadius.circular(13),
-                border:       Border.all(color: colors.hair, width: 1),
-                boxShadow: [
-                  BoxShadow(
-                    color:      Colors.black.withValues(alpha: 0.25),
-                    blurRadius: 8,
-                    offset:     const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Icon(Icons.arrow_back_rounded, color: colors.tx2, size: 17),
-            ),
-          ),
-
-          // Center route display
+          _SeatHeaderBackButton(colors: colors),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Large IATA codes with flight arrow
+                AppText(
+                  'Seat selection',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: colors.tx3,
+                  letterSpacing: 0.6,
+                  poppins: true,
+                ),
+                const SizedBox(height: 8),
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    AppText(
-                      fromCode,
-                      fontSize:   28,
-                      fontWeight: FontWeight.w800,
-                      color:      Colors.white,
-                      poppins:    true,
-                      letterSpacing: -0.5,
-                    ),
+                    _SeatHeaderCode(code: fromCode),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 7, vertical: 5),
-                        decoration: BoxDecoration(
-                          color:        AppColors.amber.withValues(alpha: 0.14),
-                          borderRadius: BorderRadius.circular(8),
-                          border:       Border.all(
-                              color: AppColors.amber.withValues(alpha: 0.30),
-                              width: 1),
-                        ),
-                        child: const Icon(Icons.flight_rounded,
-                            color: AppColors.amber, size: 14),
+                      child: Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 16,
+                        color: colors.tx3.withValues(alpha: 0.55),
                       ),
                     ),
-                    AppText(
-                      toCode,
-                      fontSize:   28,
-                      fontWeight: FontWeight.w800,
-                      color:      Colors.white,
-                      poppins:    true,
-                      letterSpacing: -0.5,
-                    ),
+                    _SeatHeaderCode(code: toCode),
+                    if (metaLabel != null) ...[
+                      const Spacer(),
+                      _SeatHeaderMetaChip(label: metaLabel),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 6),
                 AppText(
-                  'Select your seat',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.amber.withValues(alpha: 0.85),
+                  '$fromCity → $toCity',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: colors.tx2,
                   poppins: true,
-                  letterSpacing: 0.3,
-                ),
-                const SizedBox(height: 4),
-                // City names
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    AppText(
-                      fromCity,
-                      fontSize:   11,
-                      fontWeight: FontWeight.w500,
-                      color:      Colors.white.withValues(alpha: 0.40),
-                      poppins:    true,
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      child: Container(
-                        width: 3, height: 3,
-                        decoration: BoxDecoration(
-                          color:  Colors.white.withValues(alpha: 0.25),
-                          shape:  BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                    AppText(
-                      toCity,
-                      fontSize:   11,
-                      fontWeight: FontWeight.w500,
-                      color:      Colors.white.withValues(alpha: 0.40),
-                      poppins:    true,
-                    ),
-                  ],
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
-
-          // Mirror back button width for symmetry
-          const SizedBox(width: 40),
         ],
+      ),
+    );
+  }
+}
+
+class _SeatHeaderBackButton extends StatelessWidget {
+  const _SeatHeaderBackButton({required this.colors});
+
+  final AppTheme colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: Get.back,
+        borderRadius: BorderRadius.circular(12),
+        child: Ink(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: colors.surf2,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: colors.hair),
           ),
+          child: Icon(Icons.arrow_back_rounded, color: colors.tx2, size: 20),
         ),
+      ),
+    );
+  }
+}
+
+class _SeatHeaderCode extends StatelessWidget {
+  const _SeatHeaderCode({required this.code});
+
+  final String code;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppText(
+      code,
+      fontSize: 24,
+      fontWeight: FontWeight.w700,
+      color: Colors.white,
+      poppins: true,
+      letterSpacing: -0.5,
+    );
+  }
+}
+
+class _SeatHeaderMetaChip extends StatelessWidget {
+  const _SeatHeaderMetaChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      ),
+      child: AppText(
+        label,
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        color: Colors.white.withValues(alpha: 0.65),
+        poppins: true,
       ),
     );
   }
@@ -507,154 +646,161 @@ class _CabinBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final fuselageW = constraints.maxWidth.clamp(0.0, _kFuselageMaxW);
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      child: ClipPath(
-        clipper: const _NoseClipper(),
-        child: Container(
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.08),
-              width: 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.45),
-                blurRadius: 32,
-                offset: const Offset(0, 12),
-              ),
-            ],
-          ),
-          child: Stack(
-            fit: StackFit.passthrough,
-            children: [
-              Positioned.fill(
-                child: Opacity(
-                  opacity: 0.22,
-                  child: Image.asset(
-                    kSeatAirplaneBgAsset,
-                    fit: BoxFit.cover,
-                    alignment: Alignment.topCenter,
-                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                  ),
+        return SizedBox(
+          width: fuselageW,
+          child: ClipPath(
+            clipper: const _FuselageClipper(),
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: const Color(0xFF4A5260).withValues(alpha: 0.5),
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    blurRadius: 28,
+                    offset: const Offset(0, 14),
+                  ),
+                ],
               ),
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        const Color(0xFF1A1D26).withValues(alpha: 0.92),
-                        colors.surf2.withValues(alpha: 0.94),
-                        colors.surf2.withValues(alpha: 0.96),
-                        const Color(0xFF14171E).withValues(alpha: 0.98),
-                      ],
-                      stops: const [0.0, 0.12, 0.85, 1.0],
+              child: Stack(
+                fit: StackFit.passthrough,
+                children: [
+                  Positioned.fill(
+                    child: CustomPaint(
+                      painter: _FuselageDeckPainter(mapWidth: _kSeatMapWidth),
                     ),
                   ),
-                ),
+                  Column(
+                    children: [
+                      const _CockpitDecor(),
+                      const SizedBox(height: 6),
+                      const _SectionHeader(label: 'Business class'),
+                      const SizedBox(height: 8),
+                      const _ColHeaderRow(),
+                      const SizedBox(height: 6),
+                      for (int i = 0; i < _kBizRows.length; i++) ...[
+                        _SeatRowWidget(
+                          row: _kBizRows[i],
+                          isBiz: true,
+                          find: find,
+                          selected: selected,
+                          onSeatTap: onSeatTap,
+                        ),
+                        if (i < _kBizRows.length - 1)
+                          const SizedBox(height: _kBizGap),
+                      ],
+                      const SizedBox(height: 16),
+                      const _GalleyDivider(),
+                      const SizedBox(height: 16),
+                      const _SectionHeader(label: 'Economy class'),
+                      const SizedBox(height: 8),
+                      const _ColHeaderRow(),
+                      const SizedBox(height: 6),
+                      for (int i = 0; i < _kEcoFront.length; i++) ...[
+                        _SeatRowWidget(
+                          row: _kEcoFront[i],
+                          isBiz: false,
+                          find: find,
+                          selected: selected,
+                          onSeatTap: onSeatTap,
+                        ),
+                        if (i < _kEcoFront.length - 1)
+                          const SizedBox(height: _kEcoGap),
+                      ],
+                      const SizedBox(height: 10),
+                      Stack(
+                        children: [
+                          const Positioned.fill(
+                            child: CustomPaint(
+                              painter: _WingBandPainter(),
+                            ),
+                          ),
+                          Column(
+                            children: [
+                              const _OverwingBanner(),
+                              const SizedBox(height: 4),
+                              for (int i = 0; i < _kOverwing.length; i++) ...[
+                                _SeatRowWidget(
+                                  row: _kOverwing[i],
+                                  isBiz: false,
+                                  isExit: true,
+                                  find: find,
+                                  selected: selected,
+                                  onSeatTap: onSeatTap,
+                                ),
+                                if (i < _kOverwing.length - 1)
+                                  const SizedBox(height: _kEcoGap + 2),
+                              ],
+                              const SizedBox(height: 4),
+                              const _OverwingBanner(),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      for (int i = 0; i < _kEcoRear.length; i++) ...[
+                        _SeatRowWidget(
+                          row: _kEcoRear[i],
+                          isBiz: false,
+                          find: find,
+                          selected: selected,
+                          onSeatTap: onSeatTap,
+                        ),
+                        if (i < _kEcoRear.length - 1)
+                          const SizedBox(height: _kEcoGap),
+                      ],
+                      const SizedBox(height: 20),
+                      const _FuselageTail(),
+                      const SizedBox(height: 12),
+                      _LegendRow(),
+                      const SizedBox(height: 24),
+                    ],
+                  ),
+                ],
               ),
-              Column(
-            children: [
-              // ── Cockpit nose decoration ─────────────────────────────────
-              _CockpitDecor(),
-              const SizedBox(height: 8),
-
-              // ── Business class ──────────────────────────────────────────
-              _SectionHeader(
-                label:    'BUSINESS · FOCUS SPRINT',
-                iconData: Icons.star_rounded,
-              ),
-              const SizedBox(height: 10),
-              const _ColHeaderRow(),
-              const SizedBox(height: 8),
-
-              for (int i = 0; i < _kBizRows.length; i++) ...[
-                _SeatRowWidget(
-                  row:       _kBizRows[i],
-                  isBiz:     true,
-                  find:      find,
-                  selected:  selected,
-                  onSeatTap: onSeatTap,
-                ),
-                if (i < _kBizRows.length - 1)
-                  const SizedBox(height: _kBizGap),
-              ],
-              const SizedBox(height: 24),
-
-              // ── Galley / exit divider ───────────────────────────────────
-              _GalleyDivider(),
-              const SizedBox(height: 24),
-
-              // ── Economy — front ─────────────────────────────────────────
-              _SectionHeader(
-                label:    'ECONOMY · DEEP WORK',
-                iconData: Icons.laptop_rounded,
-              ),
-              const SizedBox(height: 10),
-              const _ColHeaderRow(),
-              const SizedBox(height: 8),
-
-              for (int i = 0; i < _kEcoFront.length; i++) ...[
-                _SeatRowWidget(
-                  row:       _kEcoFront[i],
-                  isBiz:     false,
-                  find:      find,
-                  selected:  selected,
-                  onSeatTap: onSeatTap,
-                ),
-                if (i < _kEcoFront.length - 1)
-                  const SizedBox(height: _kEcoGap),
-              ],
-              const SizedBox(height: 14),
-
-              // ── Over-wing exit rows ─────────────────────────────────────
-              _OverwingBanner(),
-              const SizedBox(height: 6),
-
-              for (int i = 0; i < _kOverwing.length; i++) ...[
-                _SeatRowWidget(
-                  row:       _kOverwing[i],
-                  isBiz:     false,
-                  isExit:    true,
-                  find:      find,
-                  selected:  selected,
-                  onSeatTap: onSeatTap,
-                ),
-                if (i < _kOverwing.length - 1)
-                  const SizedBox(height: _kEcoGap + 4),
-              ],
-
-              const SizedBox(height: 6),
-              _OverwingBanner(),
-              const SizedBox(height: 14),
-
-              // ── Economy — rear ──────────────────────────────────────────
-              for (int i = 0; i < _kEcoRear.length; i++) ...[
-                _SeatRowWidget(
-                  row:       _kEcoRear[i],
-                  isBiz:     false,
-                  find:      find,
-                  selected:  selected,
-                  onSeatTap: onSeatTap,
-                ),
-                if (i < _kEcoRear.length - 1)
-                  const SizedBox(height: _kEcoGap),
-              ],
-              const SizedBox(height: 28),
-
-              // ── Legend ──────────────────────────────────────────────────
-              _LegendRow(),
-              const SizedBox(height: 32),
-            ],
-              ),
-            ],
+            ),
           ),
-        ),
+        );
+      },
+    );
+  }
+}
+
+class _FuselageTail extends StatelessWidget {
+  const _FuselageTail();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(
+        children: [
+          Container(
+            height: 1,
+            color: Colors.white.withValues(alpha: 0.08),
+          ),
+          const SizedBox(height: 14),
+          Icon(
+            Icons.airplanemode_active_rounded,
+            size: 20,
+            color: Colors.white.withValues(alpha: 0.2),
+          ),
+          const SizedBox(height: 6),
+          AppText(
+            'Aft cabin',
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: Colors.white.withValues(alpha: 0.28),
+            letterSpacing: 1.2,
+            poppins: true,
+          ),
+          const SizedBox(height: 16),
+        ],
       ),
     );
   }
@@ -665,85 +811,44 @@ class _CabinBody extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _CockpitDecor extends StatelessWidget {
+  const _CockpitDecor();
+
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
-
-    return Column(
-      children: [
-        const SizedBox(height: 86), // empty space inside the nose arch
-
-        // Handle / drag indicator
-        Container(
-          width: 32, height: 3,
-          decoration: BoxDecoration(
-            color:        colors.hair2,
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // Cockpit windows — two small rounded rects
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _CockpitWindow(),
-            const SizedBox(width: 14),
-            _CockpitWindow(),
-          ],
-        ),
-        const SizedBox(height: 8),
-
-        // "COCKPIT" label
-        AppText(
-          'COCKPIT',
-          fontSize: 9,
-          fontWeight: FontWeight.w700,
-          color: AppColors.amber.withValues(alpha: 0.65),
-          letterSpacing: 2.5,
-          poppins: true,
-        ),
-        const SizedBox(height: 18),
-
-        // Nose divider — amber glow
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 36),
-          child: Container(
-            height: 1,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.transparent,
-                  AppColors.amber.withValues(alpha: 0.35),
-                  Colors.transparent,
-                ],
-              ),
+    return SizedBox(
+      height: 118,
+      width: double.infinity,
+      child: Stack(
+        alignment: Alignment.bottomCenter,
+        children: [
+          Positioned(
+            top: 8,
+            left: 24,
+            right: 24,
+            height: 72,
+            child: CustomPaint(
+              painter: _CockpitGlassPainter(),
             ),
           ),
-        ),
-      ],
-    );
-  }
-}
-
-class _CockpitWindow extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 28, height: 16,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF4A3510), Color(0xFF2A1E08)],
-        ),
-        borderRadius: BorderRadius.circular(6),
-        border:       Border.all(
-            color: AppColors.amber.withValues(alpha: 0.45), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color:      AppColors.amber.withValues(alpha: 0.22),
-            blurRadius: 10,
+          Positioned(
+            bottom: 10,
+            child: AppText(
+              'Flight deck',
+              fontSize: 9,
+              fontWeight: FontWeight.w600,
+              color: Colors.white.withValues(alpha: 0.35),
+              letterSpacing: 1.4,
+              poppins: true,
+            ),
+          ),
+          Positioned(
+            bottom: 0,
+            left: 32,
+            right: 32,
+            child: Container(
+              height: 1,
+              color: Colors.white.withValues(alpha: 0.1),
+            ),
           ),
         ],
       ),
@@ -751,45 +856,91 @@ class _CockpitWindow extends StatelessWidget {
   }
 }
 
+class _CockpitGlassPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    final glass = Path()
+      ..moveTo(w * 0.18, h)
+      ..quadraticBezierTo(w * 0.5, h * 0.02, w * 0.82, h)
+      ..lineTo(w * 0.72, h * 0.55)
+      ..quadraticBezierTo(w * 0.5, h * 0.38, w * 0.28, h * 0.55)
+      ..close();
+
+    canvas.drawPath(
+      glass,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF7A8FA8), Color(0xFF3D4A5C)],
+        ).createShader(Offset.zero & size),
+    );
+
+    final frame = Paint()
+      ..color = const Color(0xFF5C6678)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    canvas.drawPath(glass, frame);
+
+    // Center windshield divider
+    canvas.drawLine(
+      Offset(w * 0.5, h * 0.12),
+      Offset(w * 0.5, h * 0.92),
+      Paint()
+        ..color = const Color(0xFF2A3140)
+        ..strokeWidth = 2,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Section header
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.label});
+
   final String label;
-  final IconData iconData;
-  const _SectionHeader({required this.label, required this.iconData});
 
   @override
   Widget build(BuildContext context) {
-    final colors   = context.colors;
-    final isBiz    = label.contains('BUSINESS');
-    final accent   = isBiz ? AppColors.amber : colors.tx3;
-    final lineColor = isBiz
-        ? AppColors.amber.withValues(alpha: 0.22)
-        : colors.hair;
+    final isBiz = label.contains('Business');
+    final accent = isBiz
+        ? AppColors.amber.withValues(alpha: 0.75)
+        : Colors.white.withValues(alpha: 0.45);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          Expanded(
-            child: Container(height: 1, color: lineColor),
+          Container(
+            width: 3,
+            height: 12,
+            decoration: BoxDecoration(
+              color: accent,
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
-          const SizedBox(width: 10),
-          Icon(iconData, color: accent, size: 12),
-          const SizedBox(width: 5),
+          const SizedBox(width: 8),
           AppText(
             label,
-            fontSize:    9,
-            fontWeight:  FontWeight.w700,
-            color:       accent,
-            letterSpacing: 1.8,
-            poppins:     true,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: accent,
+            poppins: true,
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Container(height: 1, color: lineColor),
+            child: Container(
+              height: 1,
+              color: Colors.white.withValues(alpha: 0.08),
+            ),
           ),
         ],
       ),
@@ -860,11 +1011,7 @@ class _SeatRowWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Porthole every even row
-    final showPort = row.isEven;
-
-    // Porthole amber if window seat is available
-    final leftAvail  = find(row, 'A')?.state == _SeatState.available;
+    final leftAvail = find(row, 'A')?.state == _SeatState.available;
     final rightAvail = find(row, 'F')?.state == _SeatState.available;
 
     Widget tile(String col) {
@@ -880,13 +1027,9 @@ class _SeatRowWidget extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        // Left porthole wall
-        SizedBox(
-          width:  _kWallW,
-          height: _kSeatSz,
-          child: showPort
-              ? Center(child: _Porthole(isAmber: leftAvail))
-              : null,
+        _FuselageWallCell(
+          isWindowSide: true,
+          lit: leftAvail,
         ),
 
         // Left seats A B C
@@ -895,19 +1038,30 @@ class _SeatRowWidget extends StatelessWidget {
           tile(_kLeftCols[i]),
         ],
 
-        // Aisle with row number
         SizedBox(
           width: _kAisleW,
           height: _kSeatSz,
-          child: Center(
-            child: AppText(
-              '$row',
-              fontSize:   12,
-              fontWeight: FontWeight.w700,
-              color:      isExit
-                  ? AppColors.amber
-                  : Colors.white.withValues(alpha: 0.55),
-              poppins:    true,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              border: Border(
+                left: BorderSide(
+                  color: Colors.white.withValues(alpha: 0.05),
+                ),
+                right: BorderSide(
+                  color: Colors.white.withValues(alpha: 0.05),
+                ),
+              ),
+            ),
+            child: Center(
+              child: AppText(
+                '$row',
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: isExit
+                    ? AppColors.amber.withValues(alpha: 0.9)
+                    : Colors.white.withValues(alpha: 0.4),
+                poppins: true,
+              ),
             ),
           ),
         ),
@@ -918,13 +1072,9 @@ class _SeatRowWidget extends StatelessWidget {
           tile(_kRightCols[i]),
         ],
 
-        // Right porthole wall
-        SizedBox(
-          width:  _kWallW,
-          height: _kSeatSz,
-          child: showPort
-              ? Center(child: _Porthole(isAmber: rightAvail))
-              : null,
+        _FuselageWallCell(
+          isWindowSide: true,
+          lit: rightAvail,
         ),
       ],
     );
@@ -935,31 +1085,58 @@ class _SeatRowWidget extends StatelessWidget {
 // Porthole window
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _Porthole extends StatelessWidget {
-  final bool isAmber;
-  const _Porthole({required this.isAmber});
+class _FuselageWallCell extends StatelessWidget {
+  const _FuselageWallCell({required this.isWindowSide, required this.lit});
+
+  final bool isWindowSide;
+  final bool lit;
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
+    return SizedBox(
+      width: _kWallW,
+      height: _kSeatSz,
+      child: Center(
+        child: isWindowSide
+            ? _AirplaneWindow(lit: lit)
+            : Container(
+                width: 2,
+                height: _kSeatSz * 0.6,
+                color: Colors.white.withValues(alpha: 0.04),
+              ),
+      ),
+    );
+  }
+}
 
+class _AirplaneWindow extends StatelessWidget {
+  const _AirplaneWindow({required this.lit});
+
+  final bool lit;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      width: 9, height: 13,
+      width: 12,
+      height: 18,
       decoration: BoxDecoration(
-        color:        isAmber ? AppColors.amberSoft : colors.surf3,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(6),
+        color: lit
+            ? const Color(0xFF8BA4C4).withValues(alpha: 0.55)
+            : const Color(0xFF2E3542),
         border: Border.all(
-          color: isAmber
-              ? AppColors.amber.withValues(alpha: 0.5)
-              : colors.hair2,
-          width: 1,
+          color: lit
+              ? const Color(0xFFB8CCE0).withValues(alpha: 0.5)
+              : const Color(0xFF4A5568),
+          width: 1.2,
         ),
-        boxShadow: isAmber
-            ? [BoxShadow(
-                color:      AppColors.amber.withValues(alpha: 0.18),
-                blurRadius: 8,
-                spreadRadius: 1,
-              )]
+        boxShadow: lit
+            ? [
+                BoxShadow(
+                  color: const Color(0xFF9BB8E8).withValues(alpha: 0.25),
+                  blurRadius: 6,
+                ),
+              ]
             : null,
       ),
     );
@@ -1020,10 +1197,15 @@ class _SeatTile extends StatelessWidget {
         width:  _kSeatSz,
         height: _kSeatSz,
         decoration: BoxDecoration(
-          color:        fill,
-          borderRadius: BorderRadius.circular(11),
-          border:       border,
-          boxShadow:    shadows,
+          color: fill,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(10),
+            topRight: Radius.circular(10),
+            bottomLeft: Radius.circular(5),
+            bottomRight: Radius.circular(5),
+          ),
+          border: border,
+          boxShadow: shadows,
         ),
         child: Stack(
           children: [
@@ -1076,43 +1258,38 @@ class _SeatTile extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _GalleyDivider extends StatelessWidget {
+  const _GalleyDivider();
+
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 16),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              AppColors.amber.withValues(alpha: 0.04),
-              AppColors.amber.withValues(alpha: 0.10),
-              AppColors.amber.withValues(alpha: 0.04),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-              color: AppColors.amber.withValues(alpha: 0.20), width: 1),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.door_sliding_outlined,
-                color: AppColors.amber.withValues(alpha: 0.60), size: 13),
-            const SizedBox(width: 8),
-            AppText(
-              'GALLEY · EMERGENCY EXIT',
-              fontSize:    9,
-              fontWeight:  FontWeight.w700,
-              color:       AppColors.amber.withValues(alpha: 0.70),
-              letterSpacing: 1.5,
-              poppins:     true,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: Row(
+        children: [
+          Expanded(child: Container(height: 1, color: Colors.white.withValues(alpha: 0.1))),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.door_sliding_rounded,
+                  size: 14,
+                  color: Colors.white.withValues(alpha: 0.4),
+                ),
+                const SizedBox(width: 6),
+                AppText(
+                  'Galley',
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white.withValues(alpha: 0.45),
+                  poppins: true,
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Icon(Icons.door_sliding_outlined,
-                color: AppColors.amber.withValues(alpha: 0.60), size: 13),
-          ],
-        ),
+          ),
+          Expanded(child: Container(height: 1, color: Colors.white.withValues(alpha: 0.1))),
+        ],
       ),
     );
   }
@@ -1123,49 +1300,29 @@ class _GalleyDivider extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _OverwingBanner extends StatelessWidget {
+  const _OverwingBanner();
+
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: Row(
         children: [
-          _ExitChip(),
-          const SizedBox(width: 8),
-          Expanded(
-            child: CustomPaint(
-              painter: _DashPainter(AppColors.amber.withValues(alpha: 0.35)),
-              child: const SizedBox(height: 1),
-            ),
+          Icon(
+            Icons.emergency_rounded,
+            size: 13,
+            color: AppColors.amber.withValues(alpha: 0.65),
           ),
-          const SizedBox(width: 8),
-          AppText.label('OVER-WING EXIT', color: AppColors.amber.withValues(alpha: 0.7)),
-          const SizedBox(width: 8),
-          Expanded(
-            child: CustomPaint(
-              painter: _DashPainter(AppColors.amber.withValues(alpha: 0.35)),
-              child: const SizedBox(height: 1),
-            ),
+          const SizedBox(width: 6),
+          AppText(
+            'Over-wing · emergency exit',
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: AppColors.amber.withValues(alpha: 0.7),
+            poppins: true,
           ),
-          const SizedBox(width: 8),
-          _ExitChip(),
         ],
       ),
-    );
-  }
-}
-
-class _ExitChip extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
-      decoration: BoxDecoration(
-        color:        AppColors.amberSoft,
-        borderRadius: BorderRadius.circular(5),
-        border:       Border.all(
-            color: AppColors.amber.withValues(alpha: 0.4), width: 1),
-      ),
-      child: const Icon(Icons.exit_to_app_rounded, color: AppColors.amber, size: 11),
     );
   }
 }
@@ -1263,28 +1420,6 @@ class _LegendItem extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Dashed line painter
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _DashPainter extends CustomPainter {
-  final Color color;
-  _DashPainter(this.color);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = color..strokeWidth = 1;
-    double x = 0;
-    while (x < size.width) {
-      canvas.drawLine(Offset(x, 0), Offset(x + 4, 0), paint);
-      x += 8;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DashPainter old) => old.color != color;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Bottom panel — seat info card + continue button
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1292,109 +1427,119 @@ class _BottomPanel extends StatelessWidget {
   final _Seat? selected;
   final Animation<Offset> slideAnim;
   final double bottomPad;
+  final VoidCallback? onContinue;
 
   const _BottomPanel({
     required this.selected,
     required this.slideAnim,
     required this.bottomPad,
+    this.onContinue,
   });
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final has    = selected != null;
+    final has = selected != null;
 
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-        child: Container(
-          decoration: BoxDecoration(
-            color: colors.surf1.withValues(alpha: 0.72),
-            border: Border(
-              top: BorderSide(color: colors.hair.withValues(alpha: 0.5)),
-            ),
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                colors.surf1.withValues(alpha: 0.0),
-                colors.surf1.withValues(alpha: 0.88),
-                colors.surf1.withValues(alpha: 0.96),
-              ],
-              stops: const [0.0, 0.22, 0.5],
-            ),
-          ),
-          child: Column(
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D0F12),
+        border: Border(top: BorderSide(color: colors.hair)),
+      ),
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Seat info card — slides up when a seat is tapped
           if (has)
             SlideTransition(
               position: slideAnim,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
                 child: _SeatInfoCard(seat: selected!),
               ),
-            ),
-
-          const SizedBox(height: 12),
-
-          // Continue button — amber gradient
-          Padding(
-            padding: EdgeInsets.fromLTRB(20, 0, 20, bottomPad + 20),
-            child: GestureDetector(
-              onTap: has ? () => HapticFeedback.mediumImpact() : null,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 260),
-                width:   double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 19),
-                decoration: BoxDecoration(
-                  gradient: has
-                      ? const LinearGradient(
-                          colors: [Color(0xFFFFC267), Color(0xFFF6A93B),
-                                   Color(0xFFE48F1A)],
-                          begin: Alignment.topLeft,
-                          end:   Alignment.bottomRight,
-                        )
-                      : null,
-                  color:        has ? null : colors.surf3,
-                  borderRadius: BorderRadius.circular(30),
-                  border: has
-                      ? null
-                      : Border.all(color: colors.hair, width: 1),
-                  boxShadow: has
-                      ? [
-                          BoxShadow(
-                            color:      AppColors.amber.withValues(alpha: 0.42),
-                            blurRadius: 28,
-                            spreadRadius: 0,
-                            offset:     const Offset(0, 10),
-                          )
-                        ]
-                      : null,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    AppText(
-                      has ? 'Continue to boarding pass' : 'Select a seat',
-                      fontSize:   16,
-                      fontWeight: FontWeight.w700,
-                      color:      has ? const Color(0xFF0A0B0D) : colors.tx3,
-                      poppins:    true,
-                      letterSpacing: 0.1,
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.airline_seat_recline_normal_rounded,
+                    size: 18,
+                    color: colors.tx3.withValues(alpha: 0.5),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: AppText(
+                      'Tap an available seat',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: colors.tx3,
+                      poppins: true,
                     ),
-                    if (has) ...[
-                      const SizedBox(width: 8),
-                      const Icon(Icons.arrow_forward_rounded,
-                          size: 18, color: Color(0xFF0A0B0D)),
-                    ],
-                  ],
-                ),
+                  ),
+                ],
               ),
+            ),
+          const SizedBox(height: 12),
+          Padding(
+            padding: EdgeInsets.fromLTRB(20, 0, 20, bottomPad + 16),
+            child: _SeatContinueButton(
+              enabled: has,
+              onTap: onContinue,
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SeatContinueButton extends StatelessWidget {
+  const _SeatContinueButton({required this.enabled, this.onTap});
+
+  final bool enabled;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(16),
+        child: Ink(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          decoration: BoxDecoration(
+            color: enabled ? AppColors.amber : colors.surf3,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: enabled ? AppColors.amber : colors.hair,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.confirmation_number_outlined,
+                size: 20,
+                color: enabled
+                    ? const Color(0xFF0A0B0D)
+                    : colors.tx3.withValues(alpha: 0.45),
+              ),
+              const SizedBox(width: 10),
+              AppText(
+                enabled ? 'Boarding pass' : 'Choose a seat',
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: enabled
+                    ? const Color(0xFF0A0B0D)
+                    : colors.tx3.withValues(alpha: 0.45),
+                poppins: true,
+              ),
+            ],
           ),
         ),
       ),
@@ -1410,113 +1555,89 @@ class _SeatInfoCard extends StatelessWidget {
   final _Seat seat;
   const _SeatInfoCard({required this.seat});
 
+  IconData get _positionIcon {
+    if (seat.isWindow) return Icons.window_rounded;
+    if (seat.isAisle) return Icons.meeting_room_outlined;
+    return Icons.airline_seat_recline_normal_rounded;
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
 
-    final borderColor = seat.isBiz
-        ? AppColors.amber.withValues(alpha: 0.35)
-        : colors.hair;
-    final glowShadow = seat.isBiz
-        ? [BoxShadow(
-            color:      AppColors.amber.withValues(alpha: 0.12),
-            blurRadius: 20,
-            spreadRadius: 2,
-          )]
-        : null;
-
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color:        colors.surf2,
-        borderRadius: BorderRadius.circular(20),
-        border:       Border.all(color: borderColor, width: 1),
-        boxShadow:    glowShadow,
+        color: colors.surf2,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.hair),
       ),
       child: Row(
         children: [
-          // Seat code badge
-          Container(
-            width: 58, height: 58,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end:   Alignment.bottomRight,
-                colors: [Color(0xFFFFC267), Color(0xFFE48F1A)],
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AppText(
+                'SEAT',
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: colors.tx3,
+                letterSpacing: 1.2,
+                poppins: true,
               ),
-              borderRadius: BorderRadius.circular(15),
-              boxShadow: [
-                BoxShadow(
-                  color:      AppColors.amber.withValues(alpha: 0.35),
-                  blurRadius: 14,
-                  offset:     const Offset(0, 4),
-                ),
-              ],
-            ),
-            alignment: Alignment.center,
-            child: AppText(
-              seat.code,
-              fontSize:   14,
-              fontWeight: FontWeight.w800,
-              color:      const Color(0xFF0A0B0D),
-              poppins:    true,
-              letterSpacing: 0.5,
-            ),
+              const SizedBox(height: 2),
+              AppText(
+                seat.code,
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: colors.tx1,
+                poppins: true,
+                letterSpacing: 0.5,
+              ),
+            ],
           ),
-          const SizedBox(width: 14),
-
+          Container(
+            width: 1,
+            height: 40,
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            color: colors.hair,
+          ),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 AppText(
                   seat.typeLabel,
-                  fontSize:   14,
-                  fontWeight: FontWeight.w700,
-                  color:      colors.tx1,
-                  poppins:    true,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: colors.tx1,
+                  poppins: true,
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 AppText(
                   seat.typeDesc,
-                  fontSize: 11,
-                  color:    colors.tx3,
-                  poppins:  true,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: colors.tx3,
+                  poppins: true,
                 ),
               ],
             ),
           ),
-
-          // Focus mode badge
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
-              color:        AppColors.amber.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-              border:       Border.all(
-                  color: AppColors.amber.withValues(alpha: 0.28), width: 1),
+              color: Colors.white.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: colors.hair),
             ),
-            child: Column(
-              children: [
-                AppText(
-                  'FOCUS',
-                  fontSize:    8,
-                  fontWeight:  FontWeight.w700,
-                  color:       AppColors.amber.withValues(alpha: 0.65),
-                  letterSpacing: 1.5,
-                  poppins:     true,
-                ),
-                const SizedBox(height: 3),
-                AppText(
-                  seat.focusLabel,
-                  fontSize:   14,
-                  fontWeight: FontWeight.w800,
-                  color:      AppColors.amber,
-                  poppins:    true,
-                  textAlign:  TextAlign.center,
-                  height:     1.1,
-                ),
-              ],
+            child: Icon(
+              _positionIcon,
+              size: 20,
+              color: seat.isBiz
+                  ? AppColors.amber.withValues(alpha: 0.85)
+                  : colors.tx2,
             ),
           ),
         ],

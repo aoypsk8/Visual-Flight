@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../../models/airport_model.dart';
 import '../../../../utils/app_colors.dart';
 import '../../../../utils/flight_route_utils.dart';
@@ -18,6 +19,8 @@ class SearchRouteCard extends StatelessWidget {
   final VoidCallback onFromTap;
   final VoidCallback onToTap;
   final VoidCallback onSwap;
+  /// When set, shows a “−” control in the card header to collapse the panel.
+  final VoidCallback? onCollapse;
 
   const SearchRouteCard({
     super.key,
@@ -32,6 +35,7 @@ class SearchRouteCard extends StatelessWidget {
     required this.onFromTap,
     required this.onToTap,
     required this.onSwap,
+    this.onCollapse,
   });
 
   bool get _hasRoute =>
@@ -65,12 +69,13 @@ class SearchRouteCard extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (routeLabel != null) _RouteHeader(label: routeLabel!),
+          if (onCollapse != null || routeLabel != null)
+            _RouteCardTopBar(label: routeLabel, onCollapse: onCollapse),
           SearchAirportRow(
             role: 'FROM',
             airport: from,
             icon: Icons.my_location_rounded,
-            isTop: routeLabel == null,
+            isTop: routeLabel == null && onCollapse == null,
             isLoading: loadingFrom,
             isCurrentLocation: fromIsCurrentLocation,
             onTap: onFromTap,
@@ -105,32 +110,81 @@ class SearchRouteCard extends StatelessWidget {
   }
 }
 
-class _RouteHeader extends StatelessWidget {
-  const _RouteHeader({required this.label});
+class _RouteCardTopBar extends StatelessWidget {
+  const _RouteCardTopBar({this.label, this.onCollapse});
 
-  final String label;
+  final String? label;
+  final VoidCallback? onCollapse;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 12, 0),
       child: Row(
         children: [
-          Icon(
-            Icons.check_circle_outline_rounded,
-            size: 16,
-            color: AppColors.amber.withValues(alpha: 0.85),
-          ),
-          const SizedBox(width: 8),
-          AppText(
-            label,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: Colors.white.withValues(alpha: 0.75),
-            poppins: true,
-          ),
+          if (label != null) ...[
+            Icon(
+              Icons.check_circle_outline_rounded,
+              size: 16,
+              color: AppColors.amber.withValues(alpha: 0.85),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: AppText(
+                label!,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Colors.white.withValues(alpha: 0.75),
+                poppins: true,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ] else
+            const Spacer(),
+          if (onCollapse != null)
+            _CollapseChipButton(onTap: onCollapse!),
         ],
+      ),
+    );
+  }
+}
+
+class _CollapseChipButton extends StatelessWidget {
+  const _CollapseChipButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Hide route panel',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            HapticFeedback.selectionClick();
+            onTap();
+          },
+          borderRadius: BorderRadius.circular(20),
+          child: Ink(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white.withValues(alpha: 0.06),
+              border: Border.all(
+                color: AppColors.amber.withValues(alpha: 0.22),
+              ),
+            ),
+            child: Icon(
+              Icons.keyboard_double_arrow_down_rounded,
+              size: 22,
+              color: AppColors.amber.withValues(alpha: 0.88),
+            ),
+          ),
+        ),
       ),
     );
   }

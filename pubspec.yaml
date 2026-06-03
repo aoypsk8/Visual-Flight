@@ -62,6 +62,7 @@ flutter:
     - assets/lottie/
     - assets/icons/
     - assets/images/
+    - assets/UI/
     - assets/translations/
     - assets/data/airport_search_index.json
 
