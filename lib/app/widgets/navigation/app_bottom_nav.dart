@@ -35,12 +35,8 @@ class AppBottomNav extends StatelessWidget {
 
   static const List<AppBottomNavItem> kAppBottomNavItems = [
     AppBottomNavItem(
-      icon: Icons.home_outlined,
-      activeIcon: Icons.home_rounded,
-      label: 'Home',
-    ),
-    AppBottomNavItem(
-      icon: Icons.travel_explore,
+      icon: Icons.travel_explore_outlined,
+      activeIcon: Icons.travel_explore_rounded,
       label: 'Search',
     ),
     AppBottomNavItem(
@@ -58,6 +54,13 @@ class AppBottomNav extends StatelessWidget {
   static const double _navHeight   = 62;
   static const double _pillHeight  = 52;
   static const double _pillPadding = 8; // horizontal inset per side
+  static const double _bottomMargin = 12;
+
+  /// Space to reserve above the floating bottom nav (nav + safe area + margins).
+  static double overlayClearance(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    return _navHeight + bottomInset + _bottomMargin + 16;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -65,7 +68,7 @@ class AppBottomNav extends StatelessWidget {
     final bottomInset = MediaQuery.of(context).padding.bottom;
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(20, 0, 20, bottomInset + 12),
+      padding: EdgeInsets.fromLTRB(20, 0, 20, bottomInset + _bottomMargin),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final navWidth  = constraints.maxWidth;

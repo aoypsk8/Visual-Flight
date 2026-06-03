@@ -1,7 +1,31 @@
-import '../../config/airport_network.dart';
 import '../../models/airport_model.dart';
 import 'airport_local_search.dart';
 import 'airport_search_index_store.dart';
+
+const kPopularPickerIata = <String>[
+  'BKK',
+  'DMK',
+  'SIN',
+  'KUL',
+  'HKG',
+  'TPE',
+  'NRT',
+  'ICN',
+  'SGN',
+  'HAN',
+  'DPS',
+  'CGK',
+  'MNL',
+  'SYD',
+  'DXB',
+  'LHR',
+  'VTE',
+  'CNX',
+  'HKT',
+  'REP',
+  'PNH',
+  'LPQ',
+];
 
 /// Airports — search and nearest lookup from bundled JSON only.
 class AirportApiService {

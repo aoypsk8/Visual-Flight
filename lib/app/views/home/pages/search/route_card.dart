@@ -4,6 +4,7 @@ import '../../../../utils/app_colors.dart';
 import '../../../../utils/flight_route_utils.dart';
 import '../../../../widgets/common/app_text.dart';
 import 'airport_row.dart';
+import 'search_route_ux.dart';
 
 class SearchRouteCard extends StatelessWidget {
   final Airport? from;
@@ -12,6 +13,8 @@ class SearchRouteCard extends StatelessWidget {
   final bool fromIsCurrentLocation;
   final double? distanceKm;
   final Duration? flightDuration;
+  final SearchRouteUxStep step;
+  final String? routeLabel;
   final VoidCallback onFromTap;
   final VoidCallback onToTap;
   final VoidCallback onSwap;
@@ -21,16 +24,23 @@ class SearchRouteCard extends StatelessWidget {
     required this.from,
     required this.to,
     required this.loadingFrom,
+    required this.step,
     this.fromIsCurrentLocation = false,
     this.distanceKm,
     this.flightDuration,
+    this.routeLabel,
     required this.onFromTap,
     required this.onToTap,
     required this.onSwap,
   });
 
   bool get _hasRoute =>
-      distanceKm != null && flightDuration != null && to != null;
+      step == SearchRouteUxStep.routeReady &&
+      distanceKm != null &&
+      flightDuration != null;
+
+  bool get _emphasizeDestination =>
+      step == SearchRouteUxStep.chooseDestination && !loadingFrom;
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +49,11 @@ class SearchRouteCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xD0131519),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(
+          color: _emphasizeDestination
+              ? AppColors.amber.withValues(alpha: 0.18)
+              : Colors.white.withValues(alpha: 0.08),
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.45),
@@ -51,29 +65,29 @@ class SearchRouteCard extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (routeLabel != null) _RouteHeader(label: routeLabel!),
           SearchAirportRow(
             role: 'FROM',
             airport: from,
             icon: Icons.my_location_rounded,
-            isTop: true,
+            isTop: routeLabel == null,
             isLoading: loadingFrom,
             isCurrentLocation: fromIsCurrentLocation,
             onTap: onFromTap,
           ),
-
           _ConnectorRow(
-            swapEnabled: to != null,
+            step: step,
+            swapEnabled: to != null && from != null,
             onSwap: onSwap,
           ),
-
           SearchAirportRow(
             role: 'TO',
             airport: to,
             icon: Icons.flight_land_rounded,
             isTop: false,
+            emphasize: _emphasizeDestination,
             onTap: onToTap,
           ),
-
           AnimatedSize(
             duration: const Duration(milliseconds: 240),
             curve: Curves.easeOutCubic,
@@ -91,40 +105,103 @@ class SearchRouteCard extends StatelessWidget {
   }
 }
 
-/// Connector line + swap button — aligned with the 44px airport row icon.
+class _RouteHeader extends StatelessWidget {
+  const _RouteHeader({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+      child: Row(
+        children: [
+          Icon(
+            Icons.check_circle_outline_rounded,
+            size: 16,
+            color: AppColors.amber.withValues(alpha: 0.85),
+          ),
+          const SizedBox(width: 8),
+          AppText(
+            label,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Colors.white.withValues(alpha: 0.75),
+            poppins: true,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ConnectorRow extends StatelessWidget {
   const _ConnectorRow({
+    required this.step,
     required this.swapEnabled,
     required this.onSwap,
   });
 
+  final SearchRouteUxStep step;
   final bool swapEnabled;
   final VoidCallback onSwap;
 
   @override
   Widget build(BuildContext context) {
+    final hint = switch (step) {
+      SearchRouteUxStep.findingOrigin => 'Setting up departure',
+      SearchRouteUxStep.chooseDestination => 'Next: pick destination',
+      SearchRouteUxStep.routeReady => 'Direct · estimate',
+    };
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 0, 18, 0),
+      padding: const EdgeInsets.fromLTRB(18, 4, 18, 4),
       child: Row(
         children: [
           SizedBox(
             width: 44,
-            child: Center(
-              child: Container(
-                width: 1,
-                height: 20,
-                color: Colors.white.withValues(alpha: 0.12),
-              ),
+            child: Column(
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: step == SearchRouteUxStep.routeReady
+                        ? AppColors.amber
+                        : Colors.white.withValues(alpha: 0.25),
+                  ),
+                ),
+                Container(
+                  width: 1,
+                  height: 16,
+                  margin: const EdgeInsets.symmetric(vertical: 4),
+                  color: Colors.white.withValues(alpha: 0.12),
+                ),
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: step == SearchRouteUxStep.chooseDestination
+                        ? AppColors.amber.withValues(alpha: 0.7)
+                        : Colors.white.withValues(alpha: 0.2),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(width: 14),
           Expanded(
-            child: Container(
-              height: 1,
-              color: Colors.white.withValues(alpha: 0.05),
+            child: AppText(
+              hint,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: Colors.white.withValues(alpha: 0.38),
+              poppins: true,
             ),
           ),
-          const SizedBox(width: 12),
           _SwapButton(enabled: swapEnabled, onTap: onSwap),
         ],
       ),
@@ -169,7 +246,6 @@ class _SwapButton extends StatelessWidget {
   }
 }
 
-/// Route summary footer — distance and flight time.
 class _RouteSummaryFooter extends StatelessWidget {
   const _RouteSummaryFooter({
     required this.distanceKm,
@@ -196,10 +272,7 @@ class _RouteSummaryFooter extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: _FooterStat(
-              value: distance,
-              unit: 'distance',
-            ),
+            child: _FooterStat(value: distance, label: 'Distance'),
           ),
           Container(
             width: 1,
@@ -209,7 +282,7 @@ class _RouteSummaryFooter extends StatelessWidget {
           Expanded(
             child: _FooterStat(
               value: duration,
-              unit: 'flight time',
+              label: 'Est. flight',
               alignEnd: true,
             ),
           ),
@@ -222,12 +295,12 @@ class _RouteSummaryFooter extends StatelessWidget {
 class _FooterStat extends StatelessWidget {
   const _FooterStat({
     required this.value,
-    required this.unit,
+    required this.label,
     this.alignEnd = false,
   });
 
   final String value;
-  final String unit;
+  final String label;
   final bool alignEnd;
 
   @override
@@ -237,7 +310,7 @@ class _FooterStat extends StatelessWidget {
           alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
         AppText(
-          unit,
+          label,
           fontSize: 11,
           fontWeight: FontWeight.w500,
           color: Colors.white.withValues(alpha: 0.32),

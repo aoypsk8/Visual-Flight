@@ -1,7 +1,10 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import '../../utils/app_colors.dart';
+import '../../utils/app_resources.dart';
 import '../../utils/app_theme.dart';
 import '../../widgets/common/app_text.dart';
 
@@ -9,10 +12,10 @@ import '../../widgets/common/app_text.dart';
 // Dimensions
 // ─────────────────────────────────────────────────────────────────────────────
 
-const _kSeatSz   = 40.0;   // seat tile width & height
-const _kSeatGap  = 5.0;    // gap between seats in same 3-group
-const _kAisleW   = 34.0;   // aisle (holds row number)
-const _kWallW    = 16.0;   // cabin wall strip (where porthole lives)
+const _kSeatSz   = 44.0;   // seat tile — larger for readability
+const _kSeatGap  = 6.0;
+const _kAisleW   = 38.0;
+const _kWallW    = 18.0;
 const _kBizGap   = 14.0;   // row gap in business
 const _kEcoGap   =  8.0;   // row gap in economy
 
@@ -150,6 +153,40 @@ class _NoseClipper extends CustomClipper<Path> {
   bool shouldReclip(covariant _NoseClipper old) => false;
 }
 
+// Full-screen airplane photo + dark scrim for legible UI on top
+class _SeatPlaneBackground extends StatelessWidget {
+  const _SeatPlaneBackground();
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Image.asset(
+          kSeatAirplaneBgAsset,
+          fit: BoxFit.cover,
+          alignment: Alignment.center,
+          errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF080A0D)),
+        ),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                const Color(0xFF050608).withValues(alpha: 0.72),
+                const Color(0xFF080A0D).withValues(alpha: 0.88),
+                const Color(0xFF080A0D).withValues(alpha: 0.94),
+              ],
+              stops: const [0.0, 0.45, 1.0],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SeatSelectionView
 // ─────────────────────────────────────────────────────────────────────────────
@@ -225,13 +262,14 @@ class _SeatSelectionViewState extends State<SeatSelectionView>
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
-    final mq     = MediaQuery.of(context);
+    final mq = MediaQuery.of(context);
 
     return Scaffold(
-      backgroundColor: colors.surf1,
+      backgroundColor: const Color(0xFF080A0D),
       body: Stack(
         children: [
+          const Positioned.fill(child: _SeatPlaneBackground()),
+
           // ── Fixed header + scrollable cabin ──────────────────────────────
           Column(
             children: [
@@ -311,17 +349,27 @@ class _SeatHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [colors.surf1, colors.surf1.withValues(alpha: 0.0)],
-          stops: const [0.72, 1.0],
-        ),
-      ),
-      padding: EdgeInsets.fromLTRB(20, topPad + 14, 20, 24),
-      child: Row(
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Container(
+          decoration: BoxDecoration(
+            color: colors.surf1.withValues(alpha: 0.55),
+            border: Border(
+              bottom: BorderSide(color: colors.hair.withValues(alpha: 0.6)),
+            ),
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                colors.surf1.withValues(alpha: 0.75),
+                colors.surf1.withValues(alpha: 0.0),
+              ],
+              stops: const [0.55, 1.0],
+            ),
+          ),
+          padding: EdgeInsets.fromLTRB(20, topPad + 12, 20, 20),
+          child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           // Back button — rounded rect
@@ -388,6 +436,15 @@ class _SeatHeader extends StatelessWidget {
                     ),
                   ],
                 ),
+                const SizedBox(height: 6),
+                AppText(
+                  'Select your seat',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.amber.withValues(alpha: 0.85),
+                  poppins: true,
+                  letterSpacing: 0.3,
+                ),
                 const SizedBox(height: 4),
                 // City names
                 Row(
@@ -426,6 +483,8 @@ class _SeatHeader extends StatelessWidget {
           // Mirror back button width for symmetry
           const SizedBox(width: 40),
         ],
+          ),
+        ),
       ),
     );
   }
@@ -451,24 +510,55 @@ class _CabinBody extends StatelessWidget {
     final colors = context.colors;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 10),
       child: ClipPath(
         clipper: const _NoseClipper(),
         child: Container(
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                const Color(0xFF1C1F28),
-                colors.surf2,
-                colors.surf2,
-                const Color(0xFF181B22),
-              ],
-              stops: const [0.0, 0.10, 0.88, 1.0],
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.08),
+              width: 1,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.45),
+                blurRadius: 32,
+                offset: const Offset(0, 12),
+              ),
+            ],
           ),
-          child: Column(
+          child: Stack(
+            fit: StackFit.passthrough,
+            children: [
+              Positioned.fill(
+                child: Opacity(
+                  opacity: 0.22,
+                  child: Image.asset(
+                    kSeatAirplaneBgAsset,
+                    fit: BoxFit.cover,
+                    alignment: Alignment.topCenter,
+                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                  ),
+                ),
+              ),
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        const Color(0xFF1A1D26).withValues(alpha: 0.92),
+                        colors.surf2.withValues(alpha: 0.94),
+                        colors.surf2.withValues(alpha: 0.96),
+                        const Color(0xFF14171E).withValues(alpha: 0.98),
+                      ],
+                      stops: const [0.0, 0.12, 0.85, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+              Column(
             children: [
               // ── Cockpit nose decoration ─────────────────────────────────
               _CockpitDecor(),
@@ -560,6 +650,8 @@ class _CabinBody extends StatelessWidget {
               // ── Legend ──────────────────────────────────────────────────
               _LegendRow(),
               const SizedBox(height: 32),
+            ],
+              ),
             ],
           ),
         ),
@@ -734,7 +826,11 @@ class _ColHeaderRow extends StatelessWidget {
       if (i > 0) widgets.add(const SizedBox(width: _kSeatGap));
       widgets.add(SizedBox(
         width: _kSeatSz,
-        child: AppText.label(cols[i], color: colors.tx3, textAlign: TextAlign.center),
+        child: AppText.label(
+          cols[i],
+          color: Colors.white.withValues(alpha: 0.7),
+          textAlign: TextAlign.center,
+        ),
       ));
     }
     return widgets;
@@ -764,8 +860,6 @@ class _SeatRowWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
-
     // Porthole every even row
     final showPort = row.isEven;
 
@@ -808,11 +902,11 @@ class _SeatRowWidget extends StatelessWidget {
           child: Center(
             child: AppText(
               '$row',
-              fontSize:   11,
-              fontWeight: FontWeight.w500,
+              fontSize:   12,
+              fontWeight: FontWeight.w700,
               color:      isExit
-                  ? AppColors.amber.withValues(alpha: 0.8)
-                  : colors.tx3,
+                  ? AppColors.amber
+                  : Colors.white.withValues(alpha: 0.55),
               poppins:    true,
             ),
           ),
@@ -936,28 +1030,40 @@ class _SeatTile extends StatelessWidget {
             if (isSelected)
               Center(
                 child: const Icon(Icons.flight,
-                    color: Color(0xFF0A0B0D), size: 18),
+                    color: Color(0xFF0A0B0D), size: 20),
               )
             else if (taken)
               Center(
                 child: Icon(Icons.close_rounded,
-                    size: 13,
-                    color: colors.tx3.withValues(alpha: 0.40)),
+                    size: 15,
+                    color: colors.tx3.withValues(alpha: 0.45)),
               )
-            else if (seat.isBiz)
-              // Headrest bar at top for business
-              Positioned(
-                top: 5, left: 7, right: 7,
-                child: Container(
-                  height: 3,
-                  decoration: BoxDecoration(
-                    color: seat.isWindow
-                        ? AppColors.amber.withValues(alpha: 0.55)
-                        : colors.hair2,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+            else ...[
+              Center(
+                child: AppText(
+                  seat.col,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: seat.isWindow
+                      ? AppColors.amber.withValues(alpha: 0.95)
+                      : Colors.white.withValues(alpha: 0.72),
+                  poppins: true,
                 ),
               ),
+              if (seat.isBiz)
+                Positioned(
+                  top: 5, left: 8, right: 8,
+                  child: Container(
+                    height: 3,
+                    decoration: BoxDecoration(
+                      color: seat.isWindow
+                          ? AppColors.amber.withValues(alpha: 0.55)
+                          : colors.hair2,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+            ],
           ],
         ),
       ),
@@ -1073,27 +1179,44 @@ class _LegendRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
 
-    return Wrap(
-      alignment:   WrapAlignment.center,
-      spacing:     16,
-      runSpacing:  8,
-      children: [
-        _LegendItem(
-          fill:   AppColors.amberSoft,
-          border: Border.all(color: AppColors.amber.withValues(alpha: 0.55), width: 1.5),
-          label:  'Window · Deep work',
-        ),
-        _LegendItem(
-          fill:   colors.surf3,
-          border: null,
-          label:  'Aisle · Flexible',
-        ),
-        _LegendItem(
-          fill:   colors.surf1,
-          border: Border.all(color: colors.hair, width: 1),
-          label:  'Taken',
-        ),
-      ],
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: colors.surf2.withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: colors.hair.withValues(alpha: 0.8)),
+      ),
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 14,
+        runSpacing: 10,
+        children: [
+          _LegendItem(
+            fill: AppColors.amberSoft,
+            border: Border.all(
+                color: AppColors.amber.withValues(alpha: 0.55), width: 1.5),
+            label: 'Window',
+          ),
+          _LegendItem(
+            fill: colors.surf3,
+            border: Border.all(color: colors.hair2, width: 1),
+            label: 'Aisle / Middle',
+          ),
+          _LegendItem(
+            fill: AppColors.amber,
+            border: null,
+            label: 'Selected',
+            icon: Icons.flight,
+          ),
+          _LegendItem(
+            fill: colors.surf1,
+            border: Border.all(color: colors.hair, width: 1),
+            label: 'Taken',
+            icon: Icons.close_rounded,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1102,8 +1225,14 @@ class _LegendItem extends StatelessWidget {
   final Color fill;
   final Border? border;
   final String label;
+  final IconData? icon;
 
-  const _LegendItem({required this.fill, required this.border, required this.label});
+  const _LegendItem({
+    required this.fill,
+    required this.border,
+    required this.label,
+    this.icon,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1111,15 +1240,23 @@ class _LegendItem extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 14, height: 14,
+          width: 18,
+          height: 18,
+          alignment: Alignment.center,
           decoration: BoxDecoration(
-            color:        fill,
-            borderRadius: BorderRadius.circular(4),
-            border:       border,
+            color: fill,
+            borderRadius: BorderRadius.circular(5),
+            border: border,
           ),
+          child: icon != null
+              ? Icon(icon, size: 11, color: const Color(0xFF0A0B0D))
+              : null,
         ),
-        const SizedBox(width: 5),
-        AppText.caption(label, color: context.colors.tx3),
+        const SizedBox(width: 6),
+        AppText.caption(
+          label,
+          color: Colors.white.withValues(alpha: 0.65),
+        ),
       ],
     );
   }
@@ -1167,20 +1304,27 @@ class _BottomPanel extends StatelessWidget {
     final colors = context.colors;
     final has    = selected != null;
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            colors.surf1.withValues(alpha: 0.0),
-            colors.surf1.withValues(alpha: 0.92),
-            colors.surf1,
-          ],
-          stops: const [0.0, 0.18, 0.45],
-        ),
-      ),
-      child: Column(
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          decoration: BoxDecoration(
+            color: colors.surf1.withValues(alpha: 0.72),
+            border: Border(
+              top: BorderSide(color: colors.hair.withValues(alpha: 0.5)),
+            ),
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                colors.surf1.withValues(alpha: 0.0),
+                colors.surf1.withValues(alpha: 0.88),
+                colors.surf1.withValues(alpha: 0.96),
+              ],
+              stops: const [0.0, 0.22, 0.5],
+            ),
+          ),
+          child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           // Seat info card — slides up when a seat is tapped
@@ -1251,6 +1395,8 @@ class _BottomPanel extends StatelessWidget {
             ),
           ),
         ],
+          ),
+        ),
       ),
     );
   }

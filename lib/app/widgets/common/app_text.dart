@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../controllers/locale_controller.dart';
@@ -31,8 +30,6 @@ class AppText extends StatelessWidget {
 
   /// true = log on every build, false = log only new combinations
   static bool logEveryBuild = false;
-
-  static final Set<String> _loggedFontKeys = {};
 
   final String text;
   final bool poppins;
@@ -233,37 +230,8 @@ class AppText extends StatelessWidget {
           ? GoogleFonts.notoSansLao(textStyle: base)
           : GoogleFonts.poppins(textStyle: base);
     }
-
-    _logFontIfNeeded(
-      localeCode: localeCode,
-      family: resolved.fontFamily ?? 'unknown',
-      source: source,
-      sample: text,
-    );
-
     return resolved;
   }
-
-  static void _logFontIfNeeded({
-    required String localeCode,
-    required String family,
-    required String source,
-    String? sample,
-  }) {
-    if (!kDebugMode || !logFontResolution) return;
-
-    final key = '$localeCode|$family|$source';
-    if (!logEveryBuild && _loggedFontKeys.contains(key)) return;
-    _loggedFontKeys.add(key);
-
-    final preview = sample == null
-        ? ''
-        : ' text="${sample.length > 30 ? '${sample.substring(0, 30)}...' : sample}"';
-    debugPrint('[AppText] locale=$localeCode font=$family source=$source$preview');
-  }
-
-  /// Clear font log cache (call after locale change to re-log)
-  static void clearFontLogCache() => _loggedFontKeys.clear();
 
   // ── Static helpers ─────────────────────────────────────────────────────────
 
@@ -275,11 +243,6 @@ class AppText extends StatelessWidget {
     final family = isLao
         ? GoogleFonts.notoSansLao().fontFamily!
         : GoogleFonts.poppins().fontFamily!;
-    _logFontIfNeeded(
-      localeCode: langCode,
-      family: family,
-      source: isLao ? 'static/locale-noto' : 'static/locale-poppins',
-    );
     return family;
   }
 
@@ -290,19 +253,9 @@ class AppText extends StatelessWidget {
       final family = lang == 'lo'
           ? GoogleFonts.notoSansLao().fontFamily!
           : GoogleFonts.poppins().fontFamily!;
-      _logFontIfNeeded(
-        localeCode: lang,
-        family: family,
-        source: 'static/controller',
-      );
       return family;
     } catch (_) {
       final family = GoogleFonts.poppins().fontFamily!;
-      _logFontIfNeeded(
-        localeCode: 'en',
-        family: family,
-        source: 'static/fallback-poppins',
-      );
       return family;
     }
   }

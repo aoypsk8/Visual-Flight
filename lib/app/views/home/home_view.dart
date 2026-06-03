@@ -4,7 +4,6 @@ import '../../controllers/home_controller.dart';
 import '../../utils/app_theme.dart';
 import '../../widgets/navigation/app_bottom_nav.dart';
 import 'pages/explore_tab_page.dart';
-import 'pages/home_tab_page.dart';
 import 'pages/profile_tab_page.dart';
 import 'pages/search_tab_page.dart';
 
@@ -12,7 +11,6 @@ class HomeView extends StatelessWidget {
   const HomeView({super.key});
 
   static const _pages = <Widget>[
-    HomeTabPage(),
     SearchTabPage(),
     ExploreTabPage(),
     ProfileTabPage(),

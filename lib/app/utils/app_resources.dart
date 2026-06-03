@@ -4,10 +4,14 @@ final class AppAssets {
   AppAssets._();
 
   static const String icons = 'assets/icons';
+  static const String images = 'assets/images';
   static const String animations = 'assets/animations';
   static const String lottie = 'assets/lottie';
   static const String translations = 'assets/translations';
 }
+
+/// Seat selection screen — airplane background (PNG in [AppAssets.images]).
+const kSeatAirplaneBgAsset = '${AppAssets.images}/seat_airplane_bg.png';
 
 final class AppLottie {
   AppLottie._();
@@ -26,6 +30,8 @@ final class AppAnimations {
 
 final class AppImages {
   AppImages._();
+
+  static const String seatAirplaneBg = kSeatAirplaneBgAsset;
 }
 
 /// SVG icons in assets/icons + Material glyphs for UI without asset files yet

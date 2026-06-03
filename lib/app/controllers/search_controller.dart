@@ -10,6 +10,7 @@ import '../services/location_service.dart';
 import '../utils/flight_route_utils.dart';
 import '../views/seat/seat_selection_view.dart';
 import '../views/home/pages/search/airport_picker_sheet.dart';
+import '../views/home/pages/search/search_route_ux.dart';
 
 class FlightSearchController extends GetxController {
   static FlightSearchController get instance => Get.find();
@@ -55,6 +56,32 @@ class FlightSearchController extends GetxController {
   bool get canContinueToSeats =>
       !loadingLocation.value && from.value != null && to.value != null;
 
+  SearchRouteUxStep get routeUxStep {
+    if (loadingLocation.value) return SearchRouteUxStep.findingOrigin;
+    if (to.value == null) return SearchRouteUxStep.chooseDestination;
+    if (from.value != null) return SearchRouteUxStep.routeReady;
+    return SearchRouteUxStep.chooseDestination;
+  }
+
+  /// Primary CTA: open destination picker, or seats when the route is complete.
+  void onPrimaryAction() {
+    switch (routeUxStep) {
+      case SearchRouteUxStep.findingOrigin:
+        return;
+      case SearchRouteUxStep.chooseDestination:
+        pickAirport(isFrom: false);
+      case SearchRouteUxStep.routeReady:
+        openSeatSelection();
+    }
+  }
+
+  String? get routeSummaryLabel {
+    final origin = from.value;
+    final dest = to.value;
+    if (origin == null || dest == null) return null;
+    return '${origin.code} → ${dest.code}';
+  }
+
   // ── Map state (not reactive — map API drives its own rendering) ────────────
   MapboxMap? mapCtrl;
   List<List<double>> currentArc = [];
@@ -62,7 +89,7 @@ class FlightSearchController extends GetxController {
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
-  // ── Location detection (after Mapbox puck is enabled — same order as HomeTabPage) ─
+  // Location puck setup runs after the map is ready (same as the former home tab).
 
   Future<void> _resolveFromNearestAirport() async {
     loadingLocation.value = true;
@@ -111,7 +138,7 @@ class FlightSearchController extends GetxController {
       ),
     );
 
-    // Device location puck (amber pulse) — matches HomeTabPage
+    // Device location puck (amber pulse).
     await map.location.updateSettings(
       LocationComponentSettings(
         enabled: true,
