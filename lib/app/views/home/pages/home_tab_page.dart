@@ -59,7 +59,7 @@ class _HomeTabPageState extends State<HomeTabPage> {
   }
 }
 
-// ── Map edge vignette — light mode ใช้ scrim มืดกว่า surf1 ─────────────────
+// Map edge vignette — light mode uses a darker scrim than surf1.
 
 class _MapEdgeScrim extends StatelessWidget {
   final AppTheme colors;
@@ -88,7 +88,7 @@ class _MapEdgeScrim extends StatelessWidget {
       );
     }
 
-    // Light mode — vignette เข้มขึ้นเพื่อ contrast บน satellite map
+    // Light mode — stronger vignette for contrast on the satellite map.
     return BoxDecoration(
       gradient: LinearGradient(
         begin: top ? Alignment.topCenter : Alignment.bottomCenter,

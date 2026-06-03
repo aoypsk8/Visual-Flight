@@ -1,7 +1,7 @@
 import 'package:get/get.dart';
 import '../controllers/auth_controller.dart';
 import '../repositories/auth_repository.dart';
-import '../services/api_client.dart';
+import '../services/api/api_client.dart';
 import '../services/auth_service.dart';
 
 /// Auth layer — repository, service, login/register controller

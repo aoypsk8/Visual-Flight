@@ -1,41 +1,41 @@
 import 'package:dio/dio.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:pretty_dio_logger/pretty_dio_logger.dart';
-import '../config/app_env.dart';
+
+import '../../config/app_env.dart';
+import 'api_dio_factory.dart';
 import 'api_exception.dart';
 import 'api_response.dart';
 
+/// FocusFlight backend HTTP client (auth, etc.).
 class ApiClient {
   final Dio _dio;
 
   ApiClient._(this._dio);
 
   factory ApiClient.create() {
-    final dio = Dio(
-      BaseOptions(
-        baseUrl: AppEnv.baseUrl,
-        connectTimeout: const Duration(seconds: 10),
-        receiveTimeout: const Duration(seconds: 15),
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          if (AppEnv.apiKey.isNotEmpty) 'x-api-key': AppEnv.apiKey,
-        },
-      ),
+    final dio = ApiDioFactory.create(
+      baseUrl: AppEnv.baseUrl,
+      headers: {
+        'Content-Type': 'application/json',
+        if (AppEnv.apiKey.isNotEmpty) 'x-api-key': AppEnv.apiKey,
+      },
+      interceptors: [_AuthInterceptor()],
+      enableDebugLog: false,
     );
-
-    dio.interceptors.add(_AuthInterceptor());
 
     if (!AppEnv.isProduction) {
       dio.interceptors.add(
-        PrettyDioLogger(requestHeader: true, requestBody: true, responseBody: true),
+        PrettyDioLogger(
+          requestHeader: true,
+          requestBody: true,
+          responseBody: true,
+        ),
       );
     }
 
     return ApiClient._(dio);
   }
-
-  // ── GET ───────────────────────────────────────────────────────────────────────
 
   Future<ApiResponse<T>> get<T>(
     String path, {
@@ -45,8 +45,6 @@ class ApiClient {
   }) =>
       _request('GET', path,
           queryParameters: queryParameters, fromJson: fromJson, options: options);
-
-  // ── POST ──────────────────────────────────────────────────────────────────────
 
   Future<ApiResponse<T>> post<T>(
     String path, {
@@ -58,8 +56,6 @@ class ApiClient {
       _request('POST', path,
           data: data, queryParameters: queryParameters, fromJson: fromJson, options: options);
 
-  // ── PUT ───────────────────────────────────────────────────────────────────────
-
   Future<ApiResponse<T>> put<T>(
     String path, {
     dynamic data,
@@ -69,8 +65,6 @@ class ApiClient {
   }) =>
       _request('PUT', path,
           data: data, queryParameters: queryParameters, fromJson: fromJson, options: options);
-
-  // ── PATCH ─────────────────────────────────────────────────────────────────────
 
   Future<ApiResponse<T>> patch<T>(
     String path, {
@@ -82,8 +76,6 @@ class ApiClient {
       _request('PATCH', path,
           data: data, queryParameters: queryParameters, fromJson: fromJson, options: options);
 
-  // ── DELETE ────────────────────────────────────────────────────────────────────
-
   Future<ApiResponse<T>> delete<T>(
     String path, {
     dynamic data,
@@ -93,8 +85,6 @@ class ApiClient {
   }) =>
       _request('DELETE', path,
           data: data, queryParameters: queryParameters, fromJson: fromJson, options: options);
-
-  // ── Upload (multipart) ────────────────────────────────────────────────────────
 
   Future<ApiResponse<T>> upload<T>(
     String path,
@@ -107,8 +97,6 @@ class ApiClient {
           fromJson: fromJson,
           options: Options(contentType: 'multipart/form-data'),
           onSendProgress: onSendProgress);
-
-  // ── Core request ──────────────────────────────────────────────────────────────
 
   Future<ApiResponse<T>> _request<T>(
     String method,
@@ -138,8 +126,6 @@ class ApiClient {
       throw _toApiException(e);
     }
   }
-
-  // ── Helpers ───────────────────────────────────────────────────────────────────
 
   String? _pickMessage(dynamic body) =>
       body is Map<String, dynamic> ? body['message'] as String? : null;
@@ -172,18 +158,23 @@ class ApiClient {
 
   String _statusMessage(int? code) {
     switch (code) {
-      case 400: return 'error_bad_request';
-      case 401: return 'error_invalid_credentials';
-      case 403: return 'error_forbidden';
-      case 404: return 'error_not_found';
-      case 422: return 'error_validation';
-      case 500: return 'error_server';
-      default:  return 'error_generic';
+      case 400:
+        return 'error_bad_request';
+      case 401:
+        return 'error_invalid_credentials';
+      case 403:
+        return 'error_forbidden';
+      case 404:
+        return 'error_not_found';
+      case 422:
+        return 'error_validation';
+      case 500:
+        return 'error_server';
+      default:
+        return 'error_generic';
     }
   }
 }
-
-// ── Auth interceptor ──────────────────────────────────────────────────────────
 
 class _AuthInterceptor extends Interceptor {
   final _box = GetStorage();

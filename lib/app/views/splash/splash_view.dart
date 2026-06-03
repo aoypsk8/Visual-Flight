@@ -56,8 +56,7 @@ class _SplashViewState extends State<SplashView> with TickerProviderStateMixin {
  
   void _goToLogin() {
     _navigated = true;
-    // final done = GetStorage().read<bool>('onboarding_done') ?? false;
-    final done = false;
+    final done = GetStorage().read<bool>('onboarding_done') ?? false;
     Get.offNamed(done ? AppRoutes.login : AppRoutes.onboarding);
   }
 

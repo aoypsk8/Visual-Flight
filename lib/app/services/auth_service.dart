@@ -2,7 +2,7 @@ import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 import '../models/user_model.dart';
 import '../repositories/auth_repository.dart';
-import 'api_exception.dart';
+import 'api/api_exception.dart';
 
 // Sits between Controller and Repository.
 // Owns token persistence and session state.

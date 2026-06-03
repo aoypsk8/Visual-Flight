@@ -1,5 +1,5 @@
 import 'package:get/get.dart';
-import '../services/api_client.dart';
+import '../services/api/api_client.dart';
 import 'auth_binding.dart';
 
 // App-wide dependencies at startup (non-feature specific).
