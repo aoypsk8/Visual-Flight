@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../controllers/home_controller.dart';
 import '../../utils/app_theme.dart';
+import '../../widgets/common/locale_reactive.dart';
 import '../../widgets/navigation/app_bottom_nav.dart';
 import 'home_tabs.dart';
 
@@ -20,7 +21,8 @@ class HomeView extends StatelessWidget {
   Widget build(BuildContext context) {
     final ctrl = HomeController.to;
 
-    return Scaffold(
+    return LocaleReactive(
+      builder: (context) => Scaffold(
       backgroundColor: context.colors.surf1,
       body: Stack(
         children: [
@@ -46,6 +48,7 @@ class HomeView extends StatelessWidget {
           ),
         ],
       ),
+    ),
     );
   }
 }

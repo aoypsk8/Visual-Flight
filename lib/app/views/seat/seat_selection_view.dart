@@ -514,7 +514,7 @@ class _SeatHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 AppText(
-                  'Seat selection',
+                  'seat_selection_title'.tr,
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
                   color: colors.tx3,
@@ -1531,7 +1531,7 @@ class _SeatContinueButton extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               AppText(
-                enabled ? 'Boarding pass' : 'Choose a seat',
+                enabled ? 'seat_boarding_pass'.tr : 'seat_choose'.tr,
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
                 color: enabled

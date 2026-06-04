@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../utils/app_colors.dart';
+import '../../utils/app_fonts.dart';
 import '../../utils/live_map_style_options.dart';
 
 /// Shared map UI chrome for live flight & road trip maps.
@@ -31,7 +32,8 @@ class LiveMapLoadingOverlay extends StatelessWidget {
             const SizedBox(height: 14),
             Text(
               message,
-              style: TextStyle(
+              style: AppFonts.of(
+                context,
                 color: Colors.white.withValues(alpha: 0.85),
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
@@ -99,7 +101,8 @@ class LiveMapTripStatusBar extends StatelessWidget {
               children: [
                 Text(
                   isFollowing ? trackingTitle : exploreTitle,
-                  style: TextStyle(
+                  style: AppFonts.of(
+                    context,
                     color: Colors.white.withValues(alpha: 0.92),
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
@@ -107,7 +110,8 @@ class LiveMapTripStatusBar extends StatelessWidget {
                 ),
                 Text(
                   mapStyleLabel,
-                  style: TextStyle(
+                  style: AppFonts.of(
+                    context,
                     color: Colors.white.withValues(alpha: 0.42),
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
@@ -116,7 +120,8 @@ class LiveMapTripStatusBar extends StatelessWidget {
                 if (showBuildingHint && followZoom < buildingVisibleZoom)
                   Text(
                     'Pinch zoom in (≥${buildingVisibleZoom.toStringAsFixed(0)}) to see 3D buildings',
-                    style: TextStyle(
+                    style: AppFonts.of(
+                      context,
                       color: AppColors.amber.withValues(alpha: 0.85),
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
@@ -124,7 +129,8 @@ class LiveMapTripStatusBar extends StatelessWidget {
                   ),
                 Text(
                   '$fromLabel → $toLabel · $percent% along route',
-                  style: TextStyle(
+                  style: AppFonts.of(
+                    context,
                     color: Colors.white.withValues(alpha: 0.5),
                     fontSize: 11,
                   ),
@@ -142,7 +148,8 @@ class LiveMapTripStatusBar extends StatelessWidget {
             ),
             child: Text(
               '$percent%',
-              style: TextStyle(
+              style: AppFonts.of(
+                context,
                 color: isFollowing ? AppColors.amber : Colors.white70,
                 fontSize: 13,
                 fontWeight: FontWeight.w800,
@@ -352,7 +359,8 @@ class LiveMapStylePickerSheet extends StatelessWidget {
               const SizedBox(height: 18),
               Text(
                 'Map style',
-                style: TextStyle(
+                style: AppFonts.of(
+                  context,
                   color: Colors.white.withValues(alpha: 0.96),
                   fontSize: 20,
                   fontWeight: FontWeight.w800,
@@ -361,7 +369,8 @@ class LiveMapStylePickerSheet extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 subtitle,
-                style: TextStyle(
+                style: AppFonts.of(
+                  context,
                   color: Colors.white.withValues(alpha: 0.48),
                   fontSize: 12,
                 ),
@@ -433,7 +442,8 @@ class _StyleCard extends StatelessWidget {
               padding: const EdgeInsets.all(10),
               child: Text(
                 option.label,
-                style: const TextStyle(
+                style: AppFonts.of(
+                  context,
                   color: Colors.white,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,

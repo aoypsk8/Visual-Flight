@@ -537,15 +537,15 @@ class _PageHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const AppText(
-                  'Check in',
+                AppText(
+                  'boarding_check_in'.tr,
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
                   color: Colors.white,
                   poppins: true,
                 ),
                 AppText(
-                  torn ? 'Boarding confirmed!' : 'Swipe right or tap to tear',
+                  torn ? 'boarding_confirmed'.tr : 'boarding_swipe'.tr,
                   fontSize: 12,
                   color: Colors.white.withValues(alpha: 0.40),
                   poppins: true,
@@ -890,8 +890,11 @@ class _TicketInfoSection extends StatelessWidget {
           // Stats row 2
           Row(
             children: [
-              const Expanded(
-                child: _StatBlock(label: 'BOARDING', value: 'Now'),
+              Expanded(
+                child: _StatBlock(
+                  label: 'boarding_stat_boarding'.tr,
+                  value: 'road_now'.tr,
+                ),
               ),
               Expanded(
                 child: _StatBlock(
@@ -1144,7 +1147,7 @@ class _CheckInButton extends StatelessWidget {
                     Icon(Icons.check_rounded, color: textColor, size: 18),
                     const SizedBox(width: 8),
                     AppText(
-                      'Confirmed!',
+                      'boarding_confirmed_short'.tr,
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: textColor,
@@ -1153,7 +1156,7 @@ class _CheckInButton extends StatelessWidget {
                   ]
                 : [
                     AppText(
-                      'Check in',
+                      'boarding_check_in'.tr,
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: textColor,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../controllers/locale_controller.dart';
 import '../../utils/app_colors.dart';
+import '../../utils/app_fonts.dart';
 import '../../utils/app_locale_utils.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -11,9 +12,9 @@ import '../../utils/app_locale_utils.dart';
 // Font detection via Localizations.localeOf(context): reactive InheritedWidget
 // that rebuilds this widget whenever GetMaterialApp.locale changes.
 //
-//   EN → GoogleFonts.poppins()
-//   LO → GoogleFonts.notoSansLao()
-//   mono → 'Menlo' system font (iOS/macOS) or monospace fallback
+//   EN → Poppins (Google Fonts)
+//   LO → Noto Sans Lao (ทุกข้อความ แม้ตั้ง poppins: true)
+//   mono → Menlo (เฉพาะ EN)
 //
 // Usage:
 //   AppText('Hello')
@@ -185,7 +186,7 @@ class AppText extends StatelessWidget {
     final langCode = appLocaleLanguageCode(context);
     final isLao = langCode == 'lo';
     final display = (mono && !isLao) ? text.toUpperCase() : text;
-    final style = _buildStyle(isLao: isLao, localeCode: langCode);
+    final style = _buildStyle(context, isLao: isLao);
 
     return Text(
       display,
@@ -199,10 +200,7 @@ class AppText extends StatelessWidget {
 
   // ── Style builder ──────────────────────────────────────────────────────────
 
-  TextStyle _buildStyle({
-    required bool isLao,
-    required String localeCode,
-  }) {
+  TextStyle _buildStyle(BuildContext context, {required bool isLao}) {
     final base = TextStyle(
       color: color,
       fontSize: fontSize,
@@ -213,50 +211,51 @@ class AppText extends StatelessWidget {
       decorationColor: underline ? underlineColor : null,
     );
 
-    late final TextStyle resolved;
-    late final String source;
-    if (mono && !isLao) {
-      source = 'mono/Menlo';
-      resolved = base.copyWith(fontFamily: 'Menlo');
-    } else if (poppins) {
-      source = 'force/poppins';
-      resolved = GoogleFonts.poppins(textStyle: base);
-    } else if (noto) {
-      source = 'force/notoSansLao';
-      resolved = GoogleFonts.notoSansLao(textStyle: base);
-    } else {
-      source = isLao ? 'locale/notoSansLao' : 'locale/poppins';
-      resolved = isLao
-          ? GoogleFonts.notoSansLao(textStyle: base)
-          : GoogleFonts.poppins(textStyle: base);
-    }
-    return resolved;
+    return AppFonts.resolve(
+      context,
+      base,
+      forcePoppins: poppins && !isLao,
+      forceNoto: noto || isLao,
+      mono: mono,
+    );
   }
+
+  /// TextStyle ตาม locale — ใช้กับ TextField, RichText, Tooltip
+  static TextStyle styleOf(
+    BuildContext context, {
+    Color color = AppColors.tx1,
+    double fontSize = 16,
+    FontWeight fontWeight = FontWeight.w400,
+    double? letterSpacing,
+    double? height,
+    bool forcePoppins = false,
+    bool mono = false,
+  }) =>
+      AppFonts.of(
+        context,
+        color: color,
+        fontSize: fontSize,
+        fontWeight: fontWeight,
+        letterSpacing: letterSpacing,
+        height: height,
+        forcePoppins: forcePoppins,
+        mono: mono,
+      );
 
   // ── Static helpers ─────────────────────────────────────────────────────────
 
   /// Locale-aware font family from context. Use in raw TextStyle / RichText.
   /// Reacts to locale changes via Localizations InheritedWidget.
-  static String fontFamilyOf(BuildContext context) {
-    final langCode = appLocaleLanguageCode(context);
-    final isLao = langCode == 'lo';
-    final family = isLao
-        ? GoogleFonts.notoSansLao().fontFamily!
-        : GoogleFonts.poppins().fontFamily!;
-    return family;
-  }
+  static String fontFamilyOf(BuildContext context) => AppFonts.familyOf(context);
 
   /// Fallback when no BuildContext is available.
   static String get fontFamily {
     try {
-      final lang = LocaleController.to.current.value.languageCode;
-      final family = lang == 'lo'
+      return LocaleController.to.current.value.languageCode == 'lo'
           ? GoogleFonts.notoSansLao().fontFamily!
           : GoogleFonts.poppins().fontFamily!;
-      return family;
     } catch (_) {
-      final family = GoogleFonts.poppins().fontFamily!;
-      return family;
+      return GoogleFonts.poppins().fontFamily!;
     }
   }
 }

@@ -179,9 +179,9 @@ class _RoadLiveViewState extends State<RoadLiveView>
                               child: HoldToEndButton(
                                 enabled: !_isEnding,
                                 onHoldComplete: _onHoldStopComplete,
-                                idleHint: 'Hold 3 s to end drive',
+                                idleHint: 'road_hold_end'.tr,
                                 semanticsLabel:
-                                    'Hold for three seconds to end drive',
+                                    'road_hold_end_detail'.tr,
                               ),
                             ),
                           ],
@@ -508,7 +508,7 @@ class _RoadImmersiveToggle extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               AppText(
-                hidden ? 'Show UI' : 'Clean view',
+                hidden ? 'flight_show_ui'.tr : 'flight_clean_view'.tr,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: hidden ? AppColors.amber : Colors.white70,

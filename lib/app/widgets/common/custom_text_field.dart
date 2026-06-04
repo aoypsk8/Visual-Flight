@@ -65,6 +65,7 @@ class AppTextField extends StatefulWidget {
   final TextEditingController? controller;
   final String? Function(String?)? validator;
   final ValueChanged<String>? onChanged;
+  final ValueChanged<String>? onFieldSubmitted;
   final bool enabled;
 
   const AppTextField({
@@ -78,6 +79,7 @@ class AppTextField extends StatefulWidget {
     this.controller,
     this.validator,
     this.onChanged,
+    this.onFieldSubmitted,
     this.enabled = true,
   });
 
@@ -141,6 +143,18 @@ class _AppTextFieldState extends State<AppTextField>
             final side = BorderSide(color: border, width: 1);
             final radius = BorderRadius.circular(14);
 
+            final fieldStyle = AppText.styleOf(
+              context,
+              color: AppColors.tx1,
+              fontSize: 16,
+              letterSpacing: -0.2,
+            );
+            final hintStyle = AppText.styleOf(
+              context,
+              color: AppColors.tx3,
+              fontSize: 15,
+            );
+
             return TextFormField(
               focusNode: _focus,
               controller: widget.controller,
@@ -149,19 +163,13 @@ class _AppTextFieldState extends State<AppTextField>
               textInputAction: widget.textInputAction,
               enabled: widget.enabled,
               onChanged: widget.onChanged,
+              onFieldSubmitted: widget.onFieldSubmitted,
               validator: widget.validator,
               cursorColor: AppColors.amber,
-              style: const TextStyle(
-                color: AppColors.tx1,
-                fontSize: 16,
-                letterSpacing: -0.2,
-              ),
+              style: fieldStyle,
               decoration: InputDecoration(
                 hintText: widget.hint,
-                hintStyle: const TextStyle(
-                  color: AppColors.tx3,
-                  fontSize: 15,
-                ),
+                hintStyle: hintStyle,
                 prefixIcon: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 18),
                   child: Icon(widget.icon, color: iconColor, size: 20),

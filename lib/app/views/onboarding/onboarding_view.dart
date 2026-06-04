@@ -183,19 +183,11 @@ class _OnboardingViewState extends State<OnboardingView> {
                       padding: const EdgeInsets.fromLTRB(20, 8, 16, 0),
                       child: Row(
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: colors.amberSoft,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: AppText.label(
-                              'FocusFlight',
-                              color: colors.amber,
-                            ),
+                          AppLogo(
+                            size: 28,
+                            showLabel: true,
+                            bordered: true,
+                            labelColor: colors.amber,
                           ),
                           const Spacer(),
                           GestureDetector(

@@ -11,6 +11,7 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' hide Size;
 import '../../config/api_urls.dart';
 import '../../widgets/map/deferred_map_host.dart';
 import '../../utils/app_colors.dart';
+import '../../utils/app_fonts.dart';
 import '../../utils/flight_route_arc.dart';
 import '../../utils/live_map_style_options.dart';
 import '../../utils/solar_terminator.dart';
@@ -1102,7 +1103,8 @@ class _MapLoadingOverlay extends StatelessWidget {
             const SizedBox(height: 14),
             Text(
               'Loading flight map…',
-              style: TextStyle(
+              style: AppFonts.of(
+                context,
                 color: Colors.white.withValues(alpha: 0.85),
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
@@ -1392,7 +1394,8 @@ class _MapStyleOptionCard extends StatelessWidget {
                               const SizedBox(width: 4),
                               Text(
                                 '3D',
-                                style: TextStyle(
+                                style: AppFonts.of(
+                                  context,
                                   color: option.accent,
                                   fontSize: 10,
                                   fontWeight: FontWeight.w800,
@@ -1451,7 +1454,8 @@ class _MapStyleOptionCard extends StatelessWidget {
                     children: [
                       Text(
                         option.label,
-                        style: TextStyle(
+                        style: AppFonts.of(
+                          context,
                           color: Colors.white.withValues(
                             alpha: selected ? 0.98 : 0.88,
                           ),
@@ -1463,7 +1467,8 @@ class _MapStyleOptionCard extends StatelessWidget {
                       const SizedBox(height: 3),
                       Text(
                         option.subtitleEn,
-                        style: TextStyle(
+                        style: AppFonts.of(
+                          context,
                           color: Colors.white.withValues(alpha: 0.5),
                           fontSize: 10,
                           fontWeight: FontWeight.w500,
@@ -1471,9 +1476,11 @@ class _MapStyleOptionCard extends StatelessWidget {
                       ),
                       Text(
                         option.subtitleLo,
-                        style: TextStyle(
+                        style: AppFonts.of(
+                          context,
                           color: Colors.white.withValues(alpha: 0.38),
                           fontSize: 9,
+                          forceNoto: true,
                         ),
                       ),
                     ],
@@ -1566,7 +1573,8 @@ class _MapStylePickerSheet extends StatelessWidget {
                       children: [
                         Text(
                           'Map style',
-                          style: TextStyle(
+                          style: AppFonts.of(
+                            context,
                             color: Colors.white.withValues(alpha: 0.96),
                             fontSize: 20,
                             fontWeight: FontWeight.w800,
@@ -1576,7 +1584,8 @@ class _MapStylePickerSheet extends StatelessWidget {
                         const SizedBox(height: 2),
                         Text(
                           'Pick your flight view',
-                          style: TextStyle(
+                          style: AppFonts.of(
+                            context,
                             color: Colors.white.withValues(alpha: 0.48),
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
@@ -1584,10 +1593,12 @@ class _MapStylePickerSheet extends StatelessWidget {
                         ),
                         Text(
                           'ເລືອກຮູບແບບແຜນທີ່',
-                          style: TextStyle(
+                          style: AppFonts.of(
+                            context,
                             color: AppColors.amber.withValues(alpha: 0.65),
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
+                            forceNoto: true,
                           ),
                         ),
                       ],
@@ -1633,7 +1644,8 @@ class _MapStylePickerSheet extends StatelessWidget {
                     Expanded(
                       child: Text(
                         'Drag down to close · map reloads when you switch',
-                        style: TextStyle(
+                        style: AppFonts.of(
+                          context,
                           color: Colors.white.withValues(alpha: 0.4),
                           fontSize: 11,
                           fontWeight: FontWeight.w500,
@@ -1705,7 +1717,8 @@ class _MapFlightStatusBar extends StatelessWidget {
                           ? '3D map · tracking airplane'
                           : '2D map · tracking airplane')
                       : 'Explore mode · drag, pinch, rotate freely',
-                  style: TextStyle(
+                  style: AppFonts.of(
+                    context,
                     color: Colors.white.withValues(alpha: 0.92),
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
@@ -1713,7 +1726,8 @@ class _MapFlightStatusBar extends StatelessWidget {
                 ),
                 Text(
                   mapStyleLabel,
-                  style: TextStyle(
+                  style: AppFonts.of(
+                    context,
                     color: Colors.white.withValues(alpha: 0.42),
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
@@ -1722,7 +1736,8 @@ class _MapFlightStatusBar extends StatelessWidget {
                 if (showBuildingHint && followZoom < buildingVisibleZoom)
                   Text(
                     'Pinch zoom in (≥${buildingVisibleZoom.toStringAsFixed(0)}) to see 3D buildings',
-                    style: TextStyle(
+                    style: AppFonts.of(
+                      context,
                       color: AppColors.amber.withValues(alpha: 0.85),
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
@@ -1730,7 +1745,8 @@ class _MapFlightStatusBar extends StatelessWidget {
                   ),
                 Text(
                   '$fromCode → $toCode · $percent% along route',
-                  style: TextStyle(
+                  style: AppFonts.of(
+                    context,
                     color: Colors.white.withValues(alpha: 0.5),
                     fontSize: 11,
                   ),
@@ -1748,7 +1764,8 @@ class _MapFlightStatusBar extends StatelessWidget {
             ),
             child: Text(
               '$percent%',
-              style: TextStyle(
+              style: AppFonts.of(
+                context,
                 color: isFollowing ? AppColors.amber : Colors.white70,
                 fontSize: 13,
                 fontWeight: FontWeight.w800,
@@ -1779,7 +1796,8 @@ class _DayNightLegend extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             'Daylight',
-            style: TextStyle(
+            style: AppFonts.of(
+              context,
               color: Colors.white.withValues(alpha: 0.75),
               fontSize: 10,
               fontWeight: FontWeight.w600,
@@ -1804,7 +1822,8 @@ class _DayNightLegend extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             'Night side',
-            style: TextStyle(
+            style: AppFonts.of(
+              context,
               color: Colors.white.withValues(alpha: 0.75),
               fontSize: 10,
               fontWeight: FontWeight.w600,

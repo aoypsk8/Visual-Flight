@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:get/get.dart';
+
 import '../../../../models/airport_model.dart';
 import '../../../../utils/app_colors.dart';
 import '../../../../utils/flight_route_utils.dart';
@@ -28,7 +30,6 @@ class SearchRouteCard extends StatelessWidget {
   final VoidCallback onPickToOnMap;
   final VoidCallback onToTap;
   final VoidCallback onSwap;
-  /// When set, shows a “−” control in the card header to collapse the panel.
   final VoidCallback? onCollapse;
 
   const SearchRouteCard({
@@ -64,13 +65,16 @@ class SearchRouteCard extends StatelessWidget {
   bool get _emphasizeDestination =>
       step == SearchRouteUxStep.chooseDestination && !loadingFrom;
 
+  bool get _showFromGps =>
+      fromIsMapPin || (from != null && !fromIsCurrentLocation);
+
   @override
   Widget build(BuildContext context) {
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: const Color(0xD0131519),
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: _emphasizeDestination
               ? AppColors.amber.withValues(alpha: 0.18)
@@ -79,8 +83,8 @@ class SearchRouteCard extends StatelessWidget {
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.45),
-            blurRadius: 32,
-            offset: const Offset(0, 12),
+            blurRadius: 28,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
@@ -90,7 +94,7 @@ class SearchRouteCard extends StatelessWidget {
           if (onCollapse != null || routeLabel != null)
             _RouteCardTopBar(label: routeLabel, onCollapse: onCollapse),
           SearchAirportRow(
-            role: 'FROM',
+            roleKey: 'search_role_from',
             airport: from,
             icon: fromIsMapPin
                 ? Icons.push_pin_rounded
@@ -99,21 +103,13 @@ class SearchRouteCard extends StatelessWidget {
             isLoading: loadingFrom,
             isCurrentLocation: fromIsCurrentLocation,
             isMapPin: fromIsMapPin,
+            emphasize: false,
+            pinningOnMap: pickingFromOnMap,
             onTap: onFromTap,
+            onPinTap: onPickFromOnMap,
+            onAltTap: !loadingFrom && _showFromGps ? onUseMyLocation : null,
+            altIcon: Icons.near_me_outlined,
           ),
-          if (!loadingFrom)
-            _EndpointPinChips(
-              pickingOnMap: pickingFromOnMap,
-              onPickOnMap: onPickFromOnMap,
-              secondary: fromIsMapPin ||
-                      (from != null && !fromIsCurrentLocation)
-                  ? _OriginChip(
-                      icon: Icons.near_me_outlined,
-                      label: 'My location',
-                      onTap: onUseMyLocation,
-                    )
-                  : null,
-            ),
           _ConnectorRow(
             step: step,
             loadingRoadRoute: loadingRoadRoute,
@@ -121,7 +117,7 @@ class SearchRouteCard extends StatelessWidget {
             onSwap: onSwap,
           ),
           SearchAirportRow(
-            role: 'TO',
+            roleKey: 'search_role_to',
             airport: to,
             icon: toIsMapPin
                 ? Icons.push_pin_rounded
@@ -129,16 +125,9 @@ class SearchRouteCard extends StatelessWidget {
             isTop: false,
             emphasize: _emphasizeDestination,
             isMapPin: toIsMapPin,
+            pinningOnMap: pickingToOnMap,
             onTap: onToTap,
-          ),
-          _EndpointPinChips(
-            pickingOnMap: pickingToOnMap,
-            onPickOnMap: onPickToOnMap,
-            secondary: _OriginChip(
-              icon: Icons.search_rounded,
-              label: 'Search',
-              onTap: onToTap,
-            ),
+            onPinTap: onPickToOnMap,
           ),
           AnimatedSize(
             duration: const Duration(milliseconds: 240),
@@ -160,104 +149,6 @@ class SearchRouteCard extends StatelessWidget {
   }
 }
 
-/// Drop pin on map; optional second chip (GPS / search list).
-class _EndpointPinChips extends StatelessWidget {
-  const _EndpointPinChips({
-    required this.pickingOnMap,
-    required this.onPickOnMap,
-    this.secondary,
-  });
-
-  final bool pickingOnMap;
-  final VoidCallback onPickOnMap;
-  final Widget? secondary;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
-      child: Row(
-        children: [
-          _OriginChip(
-            icon: Icons.push_pin_outlined,
-            label: pickingOnMap ? 'Tap map…' : 'Drop pin',
-            active: pickingOnMap,
-            onTap: onPickOnMap,
-          ),
-          if (secondary != null) ...[
-            const SizedBox(width: 8),
-            secondary!,
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _OriginChip extends StatelessWidget {
-  const _OriginChip({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.active = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          HapticFeedback.selectionClick();
-          onTap();
-        },
-        borderRadius: BorderRadius.circular(999),
-        child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          decoration: BoxDecoration(
-            color: active
-                ? AppColors.amber.withValues(alpha: 0.18)
-                : Colors.white.withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: active
-                  ? AppColors.amber.withValues(alpha: 0.45)
-                  : Colors.white.withValues(alpha: 0.1),
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: 14,
-                color: active
-                    ? AppColors.amber
-                    : Colors.white.withValues(alpha: 0.55),
-              ),
-              const SizedBox(width: 6),
-              AppText(
-                label,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: active
-                    ? AppColors.amber
-                    : Colors.white.withValues(alpha: 0.65),
-                poppins: true,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _RouteCardTopBar extends StatelessWidget {
   const _RouteCardTopBar({this.label, this.onCollapse});
 
@@ -267,20 +158,20 @@ class _RouteCardTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 12, 0),
+      padding: const EdgeInsets.fromLTRB(14, 10, 10, 0),
       child: Row(
         children: [
           if (label != null) ...[
             Icon(
               Icons.check_circle_outline_rounded,
-              size: 16,
+              size: 15,
               color: AppColors.amber.withValues(alpha: 0.85),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: AppText(
                 label!,
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: FontWeight.w600,
                 color: Colors.white.withValues(alpha: 0.75),
                 poppins: true,
@@ -290,8 +181,7 @@ class _RouteCardTopBar extends StatelessWidget {
             ),
           ] else
             const Spacer(),
-          if (onCollapse != null)
-            _CollapseChipButton(onTap: onCollapse!),
+          if (onCollapse != null) _CollapseChipButton(onTap: onCollapse!),
         ],
       ),
     );
@@ -307,7 +197,7 @@ class _CollapseChipButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: 'Hide route panel',
+      label: 'search_hide_panel'.tr,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -317,8 +207,8 @@ class _CollapseChipButton extends StatelessWidget {
           },
           borderRadius: BorderRadius.circular(20),
           child: Ink(
-            width: 36,
-            height: 36,
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: Colors.white.withValues(alpha: 0.06),
@@ -328,7 +218,7 @@ class _CollapseChipButton extends StatelessWidget {
             ),
             child: Icon(
               Icons.keyboard_double_arrow_down_rounded,
-              size: 22,
+              size: 20,
               color: AppColors.amber.withValues(alpha: 0.88),
             ),
           ),
@@ -354,58 +244,28 @@ class _ConnectorRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hint = loadingRoadRoute
-        ? 'Finding road route…'
+        ? 'search_connector_finding_road'.tr
         : switch (step) {
-            SearchRouteUxStep.findingOrigin => 'Setting up departure',
-            SearchRouteUxStep.chooseDestination => 'Next: pick destination',
-            SearchRouteUxStep.routeReady => 'Direct · estimate',
+            SearchRouteUxStep.findingOrigin =>
+              'search_connector_setting_origin'.tr,
+            SearchRouteUxStep.chooseDestination =>
+              'search_connector_pick_dest'.tr,
+            SearchRouteUxStep.routeReady => 'search_connector_direct'.tr,
           };
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 4, 18, 4),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
       child: Row(
         children: [
-          SizedBox(
-            width: 44,
-            child: Column(
-              children: [
-                Container(
-                  width: 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: step == SearchRouteUxStep.routeReady
-                        ? AppColors.amber
-                        : Colors.white.withValues(alpha: 0.25),
-                  ),
-                ),
-                Container(
-                  width: 1,
-                  height: 16,
-                  margin: const EdgeInsets.symmetric(vertical: 4),
-                  color: Colors.white.withValues(alpha: 0.12),
-                ),
-                Container(
-                  width: 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: step == SearchRouteUxStep.chooseDestination
-                        ? AppColors.amber.withValues(alpha: 0.7)
-                        : Colors.white.withValues(alpha: 0.2),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 14),
           Expanded(
             child: AppText(
               hint,
-              fontSize: 12,
+              fontSize: 11,
               fontWeight: FontWeight.w500,
-              color: Colors.white.withValues(alpha: 0.38),
+              color: Colors.white.withValues(alpha: 0.32),
               poppins: true,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
           _SwapButton(enabled: swapEnabled, onTap: onSwap),
@@ -427,12 +287,12 @@ class _SwapButton extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: enabled ? onTap : null,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
         child: Ink(
-          width: 40,
-          height: 40,
+          width: 36,
+          height: 36,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(18),
             border: Border.all(
               color: enabled
                   ? AppColors.amber.withValues(alpha: 0.35)
@@ -441,7 +301,7 @@ class _SwapButton extends StatelessWidget {
           ),
           child: Icon(
             Icons.swap_vert_rounded,
-            size: 20,
+            size: 18,
             color: enabled
                 ? AppColors.amber.withValues(alpha: 0.9)
                 : Colors.white.withValues(alpha: 0.25),
@@ -459,28 +319,27 @@ class _RouteLoadingFooter extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
       decoration: BoxDecoration(
         border: Border(
           top: BorderSide(color: Colors.white.withValues(alpha: 0.07)),
         ),
-        color: Colors.white.withValues(alpha: 0.02),
       ),
       child: Row(
         children: [
           SizedBox(
-            width: 22,
-            height: 22,
+            width: 20,
+            height: 20,
             child: CircularProgressIndicator(
-              strokeWidth: 2.2,
+              strokeWidth: 2,
               color: AppColors.amber.withValues(alpha: 0.9),
             ),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
           Expanded(
             child: AppText(
-              'Calculating drive distance & time…',
-              fontSize: 13,
+              'search_calculating_drive'.tr,
+              fontSize: 12,
               fontWeight: FontWeight.w600,
               color: Colors.white.withValues(alpha: 0.72),
               poppins: true,
@@ -510,27 +369,31 @@ class _RouteSummaryFooter extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
       decoration: BoxDecoration(
         border: Border(
           top: BorderSide(color: Colors.white.withValues(alpha: 0.07)),
         ),
-        color: Colors.white.withValues(alpha: 0.02),
       ),
       child: Row(
         children: [
           Expanded(
-            child: _FooterStat(value: distance, label: 'Distance'),
+            child: _FooterStat(
+              value: distance,
+              label: 'search_stat_distance'.tr,
+            ),
           ),
           Container(
             width: 1,
-            height: 32,
+            height: 28,
             color: Colors.white.withValues(alpha: 0.08),
           ),
           Expanded(
             child: _FooterStat(
               value: duration,
-              label: isDrive ? 'Est. drive' : 'Est. flight',
+              label: isDrive
+                  ? 'search_stat_est_drive'.tr
+                  : 'search_stat_est_flight'.tr,
               alignEnd: true,
             ),
           ),
@@ -559,19 +422,18 @@ class _FooterStat extends StatelessWidget {
       children: [
         AppText(
           label,
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: FontWeight.w500,
           color: Colors.white.withValues(alpha: 0.32),
           poppins: true,
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 2),
         AppText(
           value,
-          fontSize: 17,
+          fontSize: 16,
           fontWeight: FontWeight.w600,
           color: Colors.white.withValues(alpha: 0.88),
           poppins: true,
-          letterSpacing: -0.2,
         ),
       ],
     );

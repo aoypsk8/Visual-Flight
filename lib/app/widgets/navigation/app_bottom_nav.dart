@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/app_theme.dart';
 import '../common/app_text.dart';
@@ -24,30 +25,30 @@ class AppBottomNavItem {
 class AppBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
-  final List<AppBottomNavItem> items;
+  final List<AppBottomNavItem>? items;
 
   const AppBottomNav({
     super.key,
     required this.currentIndex,
     required this.onTap,
-    this.items = kAppBottomNavItems,
+    this.items,
   });
 
-  static const List<AppBottomNavItem> kAppBottomNavItems = [
+  static List<AppBottomNavItem> localizedItems() => [
     AppBottomNavItem(
       icon: Icons.flight_outlined,
       activeIcon: Icons.flight_rounded,
-      label: 'Flight',
+      label: 'nav_flight'.tr,
     ),
     AppBottomNavItem(
       icon: Icons.directions_car_outlined,
       activeIcon: Icons.directions_car_rounded,
-      label: 'Car',
+      label: 'nav_car'.tr,
     ),
     AppBottomNavItem(
       icon: Icons.person_outline_rounded,
       activeIcon: Icons.person_rounded,
-      label: 'Profile',
+      label: 'nav_profile'.tr,
     ),
   ];
 
@@ -66,13 +67,14 @@ class AppBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors      = context.colors;
     final bottomInset = MediaQuery.of(context).padding.bottom;
+    final navItems = items ?? AppBottomNav.localizedItems();
 
     return Padding(
       padding: EdgeInsets.fromLTRB(20, 0, 20, bottomInset + _bottomMargin),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final navWidth  = constraints.maxWidth;
-          final itemWidth = navWidth / items.length;
+          final itemWidth = navWidth / navItems.length;
           final pillWidth = itemWidth - _pillPadding * 2;
           final pillLeft  = currentIndex * itemWidth + _pillPadding;
           final pillTop   = (_navHeight - _pillHeight) / 2;
@@ -112,8 +114,8 @@ class AppBottomNav extends StatelessWidget {
 
                 // ── Tab tiles ──────────────────────────────────────────────
                 Row(
-                  children: List.generate(items.length, (i) => _NavTile(
-                    item: items[i],
+                  children: List.generate(navItems.length, (i) => _NavTile(
+                    item: navItems[i],
                     isActive: currentIndex == i,
                     onTap: () => onTap(i),
                   )),
@@ -186,22 +188,12 @@ class _NavTile extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 4),
-            AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 220),
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-                letterSpacing: 0.2,
-                color: isActive ? AppColors.amber : colors.tx3,
-              ),
-              child: AppText(
-                item.label,
-                fontSize: 10,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-                letterSpacing: 0.2,
-                poppins: true,
-                color: isActive ? AppColors.amber : colors.tx3,
-              ),
+            AppText(
+              item.label,
+              fontSize: 10,
+              fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+              letterSpacing: 0.2,
+              color: isActive ? AppColors.amber : colors.tx3,
             ),
           ],
         ),

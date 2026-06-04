@@ -1,3 +1,7 @@
+import 'package:get/get.dart';
+
+import '../../../../controllers/search_controller.dart';
+
 /// Which route endpoint the user is placing via map tap.
 enum MapPinPickTarget { from, to }
 
@@ -9,25 +13,29 @@ enum SearchRouteUxStep {
 }
 
 extension SearchRouteUxStepX on SearchRouteUxStep {
-  String get hint {
+  String hint(TravelMode mode) {
     switch (this) {
       case SearchRouteUxStep.findingOrigin:
-        return 'Getting your location…';
+        return 'search_hint_finding_origin'.tr;
       case SearchRouteUxStep.chooseDestination:
-        return 'Tap below to choose where you are flying';
+        return mode == TravelMode.drive
+            ? 'search_hint_choose_dest_drive'.tr
+            : 'search_hint_choose_dest_flight'.tr;
       case SearchRouteUxStep.routeReady:
-        return 'Your route is ready — pick a seat when you are';
+        return mode == TravelMode.drive
+            ? 'search_hint_route_ready_drive'.tr
+            : 'search_hint_route_ready_flight'.tr;
     }
   }
 
-  String get primaryLabel {
+  String primaryLabel(TravelMode mode) {
     switch (this) {
       case SearchRouteUxStep.findingOrigin:
-        return 'Please wait';
+        return 'search_btn_wait'.tr;
       case SearchRouteUxStep.chooseDestination:
-        return 'Choose destination';
+        return 'search_btn_choose_destination'.tr;
       case SearchRouteUxStep.routeReady:
-        return 'Select seat';
+        return 'search_btn_select_seat'.tr;
     }
   }
 

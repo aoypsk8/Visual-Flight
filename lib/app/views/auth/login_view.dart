@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:sizer/sizer.dart';
+import '../../config/auth_features.dart';
 import '../../controllers/auth_controller.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/app_resources.dart';
@@ -59,15 +60,10 @@ class LoginView extends StatelessWidget {
                             // ── Brand + language toggle ──────────────────
                             Row(
                               children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 5),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.amberSoft,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const AppText.label('FocusFlight',
-                                      color: AppColors.amber),
+                                const AppLogo(
+                                  size: 28,
+                                  showLabel: true,
+                                  bordered: true,
                                 ),
                                 const Spacer(),
                                 const SizedBox(width: 8),
@@ -171,24 +167,28 @@ class LoginView extends StatelessWidget {
                             AppOrDivider(label: 'or_continue_with'.tr),
                             const SizedBox(height: 16),
 
-                            // ── Social buttons ───────────────────────────
-                            Row(children: [
-                              Expanded(
-                                child: AppSocialButton(
-                                  iconAsset: AppIcons.google,
-                                  label: 'Google',
-                                  onTap: () {},
-                                ),
+                            // ── Social (Google; Apple ปิดจนมี paid Apple Developer) ──
+                            Obx(
+                              () => AppSocialButton(
+                                iconAsset: AppIcons.google,
+                                label: 'Google',
+                                onTap: ctrl.isLoading.value
+                                    ? null
+                                    : ctrl.signInWithGoogle,
                               ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: AppSocialButton(
+                            ),
+                            if (AuthFeatures.appleSignInEnabled) ...[
+                              const SizedBox(height: 10),
+                              Obx(
+                                () => AppSocialButton(
                                   iconAsset: AppIcons.apple,
                                   label: 'Apple',
-                                  onTap: () {},
+                                  onTap: ctrl.isLoading.value
+                                      ? null
+                                      : ctrl.signInWithApple,
                                 ),
                               ),
-                            ]),
+                            ],
 
                             const Spacer(),
 
@@ -202,17 +202,18 @@ class LoginView extends StatelessWidget {
                                   child: RichText(
                                     text: TextSpan(
                                       text: '${'new_here'.tr}  ',
-                                      style: TextStyle(
+                                      style: AppText.styleOf(
+                                        context,
                                         color: AppColors.tx3,
                                         fontSize: 14,
-                                        fontFamily:
-                                            AppText.fontFamilyOf(context),
                                       ),
                                       children: [
                                         TextSpan(
                                           text: 'go_create_account'.tr,
-                                          style: const TextStyle(
+                                          style: AppText.styleOf(
+                                            context,
                                             color: AppColors.tx1,
+                                            fontSize: 14,
                                             fontWeight: FontWeight.w600,
                                           ),
                                         ),

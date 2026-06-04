@@ -2,22 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>This app shows your current location on the globe.</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>This app shows your current location on the globe.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>Take photos during your flights and travels.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Access your photos to attach memories to each flight.</string>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Save your flight photos to your library.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Visual Focusflight</string>
+	<string>FoFuckDingo</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -32,10 +22,33 @@
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>GoogleSignIn</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.248032730149-dn949h240nei7qf2r0c9efj025nl9org</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Take photos during your flights and travels.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>This app shows your current location on the globe.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app shows your current location on the globe.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Save your flight photos to your library.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Access your photos to attach memories to each flight.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

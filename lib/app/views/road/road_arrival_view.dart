@@ -355,7 +355,7 @@ class _HeroBadgeSection extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         AppText(
-          'Road trip complete',
+          'road_arrival_title'.tr,
           fontSize: 13,
           fontWeight: FontWeight.w500,
           color: AppColors.tx2,
@@ -768,7 +768,7 @@ class _ShareButton extends StatelessWidget {
       '${session.fromCity} → ${session.toCity}\n'
       '💺 Seat ${session.seatCode}  ·  📏 $distance  ·  ⏱ $driveTime\n'
       '📅 $dateStr\n\n'
-      'Focused the whole drive ✨\n#FocusFlight #RoadTrip';
+      'Focused the whole drive ✨\n#FoFuckDingo #RoadTrip';
 
   @override
   Widget build(BuildContext context) {
@@ -805,7 +805,7 @@ class _ShareButton extends StatelessWidget {
                     ),
                     const SizedBox(width: 10),
                     AppText(
-                      'Share with friends',
+                      'road_share_friends'.tr,
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
                       color: Colors.white.withValues(alpha: 0.85),
@@ -850,15 +850,15 @@ class _HomeButton extends StatelessWidget {
               Get.offAllNamed(AppRoutes.home);
             },
             borderRadius: BorderRadius.circular(18),
-            child: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 17),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 17),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(Icons.home_rounded, size: 20, color: Color(0xFF0A0B0D)),
                   SizedBox(width: 10),
                   AppText(
-                    'Back to home',
+                    'road_back_home'.tr,
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
                     color: Color(0xFF0A0B0D),

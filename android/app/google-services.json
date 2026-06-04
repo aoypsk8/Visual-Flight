@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "248032730149",
+    "project_id": "visualfocus-7a7c8",
+    "storage_bucket": "visualfocus-7a7c8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:248032730149:android:6f785648264f4ac82b73cc",
+        "android_client_info": {
+          "package_name": "com.aoy.visualfocusflight"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "248032730149-a6k3dr42l09laem2uv77ltqp197kevkr.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aoy.visualfocusflight",
+            "certificate_hash": "201557f6ad78fa8a0adc710a919c19d418dc96b6"
+          }
+        },
+        {
+          "client_id": "248032730149-e53gp4mkarn95a5233o5ra80ntbas170.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCEP_n3CR5GWVPx8zSyb3HD-aXnPKFWQAE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "248032730149-e53gp4mkarn95a5233o5ra80ntbas170.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "248032730149-dn949h240nei7qf2r0c9efj025nl9org.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.aoy.visualfocusflight"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

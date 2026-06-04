@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+
 import '../routes/app_routes.dart';
 import '../services/auth_service.dart';
+import '../utils/firebase_auth_errors.dart';
 
-/// Shared state for the login, register, and forgot-password screens
+/// Login, register, forgot-password และ social sign-in (Firebase)
 class AuthController extends GetxController {
   static AuthController get to => Get.find();
 
   final _auth = AuthService.to;
 
-  // ── Form fields ────────────────────────────────────────────────────────────
   final nameCtrl = TextEditingController();
   final emailCtrl = TextEditingController();
   final passwordCtrl = TextEditingController();
@@ -18,11 +19,9 @@ class AuthController extends GetxController {
   final registerFormKey = GlobalKey<FormState>();
   final forgotFormKey = GlobalKey<FormState>();
 
-  // ── Shared / login-register ────────────────────────────────────────────────
   final isLoading = false.obs;
   final errorMsg = ''.obs;
 
-  // ── Forgot password ────────────────────────────────────────────────────────
   final forgotIsLoading = false.obs;
   final forgotErrorMsg = ''.obs;
   final forgotEmailSent = false.obs;
@@ -42,21 +41,47 @@ class AuthController extends GetxController {
     forgotEmailSent.value = false;
   }
 
-  // ── Login ──────────────────────────────────────────────────────────────────
-
   Future<void> signIn() async {
     _clearError();
     if (!loginFormKey.currentState!.validate()) return;
 
     isLoading.value = true;
     try {
-      // await _auth.login(
-      //   email: emailCtrl.text.trim(),
-      //   password: passwordCtrl.text,
-      // );
+      await _auth.login(
+        email: emailCtrl.text.trim(),
+        password: passwordCtrl.text,
+      );
       Get.offAllNamed(AppRoutes.home);
     } catch (e) {
-      errorMsg.value = e.toString();
+      errorMsg.value = firebaseAuthErrorMessage(e);
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<void> signInWithGoogle() async {
+    _clearError();
+    isLoading.value = true;
+    try {
+      final result = await _auth.loginWithGoogle();
+      if (result != null) {
+        Get.offAllNamed(AppRoutes.home);
+      }
+    } catch (e) {
+      errorMsg.value = firebaseAuthErrorMessage(e);
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<void> signInWithApple() async {
+    _clearError();
+    isLoading.value = true;
+    try {
+      await _auth.loginWithApple();
+      Get.offAllNamed(AppRoutes.home);
+    } catch (e) {
+      errorMsg.value = firebaseAuthErrorMessage(e);
     } finally {
       isLoading.value = false;
     }
@@ -73,8 +98,6 @@ class AuthController extends GetxController {
     Get.toNamed(AppRoutes.forgotPassword);
   }
 
-  // ── Register ─────────────────────────────────────────────────────────────
-
   Future<void> register() async {
     _clearError();
     if (!registerFormKey.currentState!.validate()) return;
@@ -86,9 +109,9 @@ class AuthController extends GetxController {
         email: emailCtrl.text.trim(),
         password: passwordCtrl.text,
       );
-      Get.offAllNamed(AppRoutes.login); // TODO: change to home route when ready
+      Get.offAllNamed(AppRoutes.home);
     } catch (e) {
-      errorMsg.value = e.toString();
+      errorMsg.value = firebaseAuthErrorMessage(e);
     } finally {
       isLoading.value = false;
     }
@@ -99,19 +122,16 @@ class AuthController extends GetxController {
     Get.back();
   }
 
-  // ── Forgot password ────────────────────────────────────────────────────────
-
   Future<void> requestPasswordReset() async {
     _clearForgotState();
     if (!forgotFormKey.currentState!.validate()) return;
 
     forgotIsLoading.value = true;
     try {
-      final email = emailCtrl.text.trim();
-      await _auth.forgotPassword(email: email);
+      await _auth.forgotPassword(email: emailCtrl.text.trim());
       forgotEmailSent.value = true;
     } catch (e) {
-      forgotErrorMsg.value = e.toString();
+      forgotErrorMsg.value = firebaseAuthErrorMessage(e);
     } finally {
       forgotIsLoading.value = false;
     }

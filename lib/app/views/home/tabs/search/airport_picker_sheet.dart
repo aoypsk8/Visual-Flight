@@ -7,6 +7,7 @@ import '../../../../services/api/airport_api_service.dart';
 import '../../../../utils/app_colors.dart';
 import '../../../../utils/app_theme.dart';
 import '../../../../widgets/common/app_text.dart';
+import '../../../../utils/app_fonts.dart';
 
 class AirportPickerSheet extends StatefulWidget {
   final Airport? selected;
@@ -134,7 +135,7 @@ class _AirportPickerSheetState extends State<AirportPickerSheet> {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: AppText.title('Select Airport', color: colors.tx1),
+              child: AppText.title('picker_title'.tr, color: colors.tx1),
             ),
           ),
           const SizedBox(height: 14),
@@ -149,10 +150,10 @@ class _AirportPickerSheetState extends State<AirportPickerSheet> {
               child: TextField(
                 controller: _ctrl,
                 autofocus: true,
-                style: TextStyle(color: colors.tx1, fontSize: 15),
+                style: AppFonts.of(context, color: colors.tx1, fontSize: 15),
                 decoration: InputDecoration(
-                  hintText: 'City, airport or code (min 2 chars)',
-                  hintStyle: TextStyle(color: colors.tx3, fontSize: 15),
+                  hintText: 'picker_hint'.tr,
+                  hintStyle: AppFonts.of(context, color: colors.tx3, fontSize: 15),
                   prefixIcon: Icon(
                     Icons.search_rounded,
                     color: colors.tx3,
@@ -189,7 +190,7 @@ class _AirportPickerSheetState extends State<AirportPickerSheet> {
     if (_ctrl.text.trim().length < _minChars) {
       if (_results.isEmpty && !_loading) {
         return Center(
-          child: AppText.body('Loading airports…', color: colors.tx3),
+          child: AppText.body('picker_loading'.tr, color: colors.tx3),
         );
       }
       return Column(
@@ -197,7 +198,7 @@ class _AirportPickerSheetState extends State<AirportPickerSheet> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
-            child: AppText.caption('Popular airports', color: colors.tx3),
+            child: AppText.caption('picker_popular'.tr, color: colors.tx3),
           ),
           Expanded(
             child: ListView.builder(
@@ -211,7 +212,7 @@ class _AirportPickerSheetState extends State<AirportPickerSheet> {
     }
     if (_results.isEmpty) {
       return Center(
-        child: AppText.body('No airports found', color: colors.tx3),
+        child: AppText.body('picker_empty'.tr, color: colors.tx3),
       );
     }
 

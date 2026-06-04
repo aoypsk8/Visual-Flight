@@ -543,8 +543,8 @@ class _RoadPassHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const AppText(
-                  'Road Trip',
+                AppText(
+                  'road_trip_title'.tr,
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
                   color: Colors.white,
@@ -552,8 +552,8 @@ class _RoadPassHeader extends StatelessWidget {
                 ),
                 AppText(
                   torn
-                      ? 'Drive confirmed — let\'s go!'
-                      : 'Swipe to start your drive',
+                      ? 'road_trip_confirmed'.tr
+                      : 'road_trip_swipe'.tr,
                   fontSize: 12,
                   color: Colors.white.withValues(alpha: 0.40),
                   poppins: true,
@@ -884,8 +884,8 @@ class _RoadTicketInfoSection extends StatelessWidget {
           // Stats row 2
           Row(
             children: [
-              const Expanded(
-                child: _StatBlock(label: 'DEPART', value: 'Now'),
+              Expanded(
+                child: _StatBlock(label: 'road_depart'.tr, value: 'road_now'.tr),
               ),
               Expanded(
                 child: _StatBlock(
@@ -1203,7 +1203,7 @@ class _RoadStartButton extends StatelessWidget {
                     Icon(Icons.check_rounded, color: textColor, size: 18),
                     const SizedBox(width: 8),
                     AppText(
-                      'Drive started!',
+                      'road_drive_started'.tr,
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: textColor,
@@ -1212,7 +1212,7 @@ class _RoadStartButton extends StatelessWidget {
                   ]
                 : [
                     AppText(
-                      'Start drive',
+                      'road_start_drive'.tr,
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: textColor,

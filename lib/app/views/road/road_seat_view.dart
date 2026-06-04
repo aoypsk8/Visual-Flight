@@ -944,7 +944,7 @@ class _RoadContinueButton extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               AppText(
-                enabled ? 'Road trip pass →' : 'Choose a seat',
+                enabled ? 'road_seat_pass'.tr : 'road_seat_choose'.tr,
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
                 color: enabled

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import '../../../../widgets/common/locale_reactive.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' hide Size, Visibility;
 import '../../../../config/api_urls.dart';
 import '../../../../controllers/search_controller.dart';
 import '../../../../utils/app_colors.dart';
+import '../../../../widgets/common/app_logo.dart';
 import '../../../../widgets/common/app_text.dart';
 import '../../../../widgets/map/deferred_map_host.dart';
 import '../../../../widgets/map/live_map_chrome.dart';
@@ -71,8 +73,8 @@ class _SearchTabLayout {
       topGradientFraction: veryCompact ? 0.24 : compact ? 0.27 : 0.30,
       bottomGradientFraction: veryCompact ? 0.28 : compact ? 0.32 : 0.36,
       maxContentWidth: w > 520 ? 480 : null,
-      sectionGap: compact ? 10 : 12,
-      buttonVerticalPadding: compact ? 14 : 16,
+      sectionGap: compact ? 8 : 10,
+      buttonVerticalPadding: compact ? 12 : 14,
       buttonRadius: compact ? 14 : 16,
     );
   }
@@ -86,7 +88,8 @@ class SearchTabPage extends StatelessWidget {
     final ctrl = FlightSearchController.instance;
     final layout = _SearchTabLayout.of(context);
 
-    return Scaffold(
+    return LocaleReactive(
+      builder: (context) => Scaffold(
       backgroundColor: const Color(0xFF080A0D),
       body: LayoutBuilder(
         builder: (context, constraints) {
@@ -185,10 +188,10 @@ class SearchTabPage extends StatelessWidget {
                     ctrl.loadingRoadRoute.value &&
                     ctrl.to.value != null;
                 if (!show) return const SizedBox.shrink();
-                return const Positioned.fill(
+                return Positioned.fill(
                   child: IgnorePointer(
                     child: LiveMapLoadingOverlay(
-                      message: 'Finding road route…',
+                      message: 'search_finding_road_route'.tr,
                     ),
                   ),
                 );
@@ -272,6 +275,7 @@ class SearchTabPage extends StatelessWidget {
           );
         },
       ),
+    ),
     );
   }
 }
@@ -302,8 +306,8 @@ class _MapPinHintBar extends StatelessWidget {
             Expanded(
               child: AppText(
                 target == MapPinPickTarget.from
-                    ? 'Tap the map to set your start point'
-                    : 'Tap the map to set your destination',
+                    ? 'search_map_pin_from'.tr
+                    : 'search_map_pin_to'.tr,
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: Colors.white.withValues(alpha: 0.9),
@@ -313,7 +317,7 @@ class _MapPinHintBar extends StatelessWidget {
             TextButton(
               onPressed: onCancel,
               child: AppText(
-                'Cancel',
+                'search_cancel'.tr,
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
                 color: AppColors.amber,
@@ -344,30 +348,23 @@ class _SearchTabHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDrive = travelMode == TravelMode.drive;
     final title = step == SearchRouteUxStep.routeReady
-        ? (isDrive ? 'Your drive' : 'Your route')
-        : (isDrive ? 'Plan a drive' : 'Find your flight');
+        ? (isDrive
+            ? 'search_title_your_drive'.tr
+            : 'search_title_your_route'.tr)
+        : (isDrive
+            ? 'search_title_plan_drive'.tr
+            : 'search_title_find_flight'.tr);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Container(
-              width: 3,
-              height: layout.compactBrandBar ? 14 : 16,
-              decoration: BoxDecoration(
-                color: AppColors.amber,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(width: 8),
-            AppText(
-              'FOCUSFLIGHT',
-              fontSize: layout.brandFontSize,
-              fontWeight: FontWeight.w700,
-              color: AppColors.amber,
-              letterSpacing: layout.width < 360 ? 2.4 : 3.2,
-              poppins: true,
+            AppLogo(
+              size: layout.compactBrandBar ? 22 : 26,
+              showLabel: true,
+              labelFontSize: layout.brandFontSize,
+              labelPoppins: true,
             ),
             const Spacer(),
           ],
@@ -387,7 +384,11 @@ class _SearchTabHeader extends StatelessWidget {
           ),
         ),
         SizedBox(height: layout.width < 360 ? 8 : 12),
-        _StepHint(step: step, fontSize: layout.hintFontSize),
+        _StepHint(
+          step: step,
+          travelMode: travelMode,
+          fontSize: layout.hintFontSize,
+        ),
       ],
     );
   }
@@ -594,7 +595,7 @@ class _RoutePanelAirplaneToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: collapsed ? 'Show route panel' : 'Hide route panel',
+      label: collapsed ? 'search_show_panel'.tr : 'search_hide_panel'.tr,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -642,9 +643,14 @@ class _RoutePanelAirplaneToggle extends StatelessWidget {
 }
 
 class _StepHint extends StatelessWidget {
-  const _StepHint({required this.step, this.fontSize = 14});
+  const _StepHint({
+    required this.step,
+    required this.travelMode,
+    this.fontSize = 14,
+  });
 
   final SearchRouteUxStep step;
+  final TravelMode travelMode;
   final double fontSize;
 
   @override
@@ -669,7 +675,7 @@ class _StepHint extends StatelessWidget {
             ),
           Expanded(
             child: AppText(
-              step.hint,
+              step.hint(travelMode),
               fontSize: fontSize,
               fontWeight: FontWeight.w500,
               color: Colors.white.withValues(alpha: 0.55),
@@ -765,10 +771,8 @@ class _PrimaryActionButton extends StatelessWidget {
               Flexible(
                 child: AppText(
                   showLoading
-                      ? 'Loading route…'
-                      : (filled && isDrive
-                          ? 'Select seat'
-                          : step.primaryLabel),
+                      ? 'search_btn_loading_route'.tr
+                      : step.primaryLabel(travelMode),
                   fontSize: layout.width < 360 ? 15 : 16,
                   fontWeight: FontWeight.w700,
                   color: filled

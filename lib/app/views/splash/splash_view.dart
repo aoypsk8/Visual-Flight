@@ -4,8 +4,10 @@ import '../../services/app_local_storage.dart';
 import 'package:lottie/lottie.dart';
 
 import '../../routes/app_routes.dart';
+import '../../services/auth_service.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/app_resources.dart';
+import '../../widgets/common/app_logo.dart';
 import '../../widgets/common/app_text.dart';
 
 class SplashView extends StatefulWidget {
@@ -56,6 +58,10 @@ class _SplashViewState extends State<SplashView> with TickerProviderStateMixin {
  
   void _goToLogin() {
     _navigated = true;
+    if (AuthService.to.isLoggedIn) {
+      Get.offAllNamed(AppRoutes.home);
+      return;
+    }
     final done = AppLocalStorage.readBool('onboarding_done') ?? false;
     Get.offNamed(done ? AppRoutes.login : AppRoutes.onboarding);
   }
@@ -79,11 +85,7 @@ class _SplashViewState extends State<SplashView> with TickerProviderStateMixin {
                 onLoaded: _handleLottieLoaded,
                 errorBuilder: (context, error, _) {
                   return const Center(
-                    child: Icon(
-                      AppIcons.lottieFallback,
-                      color: AppColors.amber,
-                      size: 64,
-                    ),
+                    child: AppLogo(size: 72),
                   );
                 },
               ),
@@ -123,6 +125,10 @@ class _SplashViewState extends State<SplashView> with TickerProviderStateMixin {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: Column(
                 children: [
+                  Align(
+                    alignment: Alignment.topCenter,
+                    child: AppLogo(size: 40, showLabel: true),
+                  ),
                   const Spacer(),
                   AnimatedBuilder(
                     animation: _lottieCtrl,
@@ -153,7 +159,11 @@ class _SplashViewState extends State<SplashView> with TickerProviderStateMixin {
                           ),
                           const SizedBox(height: 8),
                           AppText(
-                            _isComplete ? 'Completed' : 'Loading ${(value * 100).round()}%',
+                            _isComplete
+                                ? 'splash_complete'.tr
+                                : 'splash_loading'.trParams({
+                                    'percent': '${(value * 100).round()}',
+                                  }),
                             color: _isComplete ? AppColors.tx1 : AppColors.tx2,
                             fontSize: 16,
                             fontWeight: FontWeight.w600,

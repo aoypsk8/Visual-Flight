@@ -1,6 +1,8 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'firebase_options.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart'
     show MapboxOptions;
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -14,12 +16,14 @@ import 'app/controllers/locale_controller.dart';
 import 'app/controllers/theme_controller.dart';
 import 'app/routes/app_pages.dart';
 import 'app/routes/app_routes.dart';
+import 'app/config/app_branding.dart';
 import 'app/utils/app_colors.dart';
 import 'app/utils/app_theme.dart';
 import 'app/utils/translations/app_translations.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await dotenv.load(fileName: '.env');
   MapboxOptions.setAccessToken(AppEnv.mapboxToken);
   await AppLocalStorage.init();
@@ -62,7 +66,7 @@ class FocusFlightApp extends StatelessWidget {
 
       return Sizer(
         builder: (context, orientation, screenType) => GetMaterialApp(
-          title: 'FocusFlight',
+          title: AppBranding.appName,
           debugShowCheckedModeBanner: false,
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,

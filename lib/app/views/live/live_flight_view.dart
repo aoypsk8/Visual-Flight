@@ -182,9 +182,9 @@ class _LiveFlightViewState extends State<LiveFlightView>
                       child: HoldToEndButton(
                         enabled: !_isEnding,
                         onHoldComplete: _onHoldStopComplete,
-                        idleHint: 'Hold 3 s to end flight',
+                        idleHint: 'flight_hold_end'.tr,
                         semanticsLabel:
-                            'Hold for three seconds to end flight',
+                            'flight_hold_end_detail'.tr,
                       ),
                     ),
                   ],
@@ -543,7 +543,7 @@ class _ImmersiveUiToggle extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               AppText(
-                hidden ? 'Show UI' : 'Clean view',
+                hidden ? 'flight_show_ui'.tr : 'flight_clean_view'.tr,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: hidden ? AppColors.amber : Colors.white70,
@@ -1034,7 +1034,7 @@ class _EndingFlightOverlay extends StatelessWidget {
                     ),
                     const SizedBox(height: 16),
                     AppText(
-                      'Ending flight…',
+                      'flight_ending'.tr,
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: Colors.white,

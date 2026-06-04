@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
+import '../../../../widgets/common/locale_reactive.dart';
+
 import '../../../../controllers/theme_controller.dart';
-import '../../../../routes/app_routes.dart';
 import '../../../../services/auth_service.dart';
 import '../../../../utils/app_theme.dart';
 import '../../../../widgets/common/app_language_toggle.dart';
@@ -20,7 +21,8 @@ class ProfileTabPage extends StatelessWidget {
     final colors = context.colors;
     final bottomInset = MediaQuery.paddingOf(context).bottom + 108;
 
-    return ColoredBox(
+    return LocaleReactive(
+      builder: (context) => ColoredBox(
       color: colors.surf1,
       child: SafeArea(
         bottom: false,
@@ -34,17 +36,15 @@ class ProfileTabPage extends StatelessWidget {
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
                   Obx(() {
-                    final user = AuthService.to.user.value;
-                    final firstName = _firstName(user?.name);
+                    final user = AuthService.to.user.value!;
                     return _ProfileIntro(
                       greeting: _greeting(),
-                      name: firstName,
-                      email: user?.email,
-                      isGuest: user == null,
+                      name: user.greetingName,
+                      email: user.email,
                     );
                   }),
                   const SizedBox(height: 32),
-                  _GroupLabel('Preferences', colors: colors),
+                  _GroupLabel('profile_preferences'.tr, colors: colors),
                   const SizedBox(height: 8),
                   _SettingsGroup(
                     colors: colors,
@@ -56,41 +56,51 @@ class ProfileTabPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 28),
                   Obx(() {
-                    final loggedIn = AuthService.to.isLoggedIn;
+                    final user = AuthService.to.user.value!;
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _GroupLabel(
-                          loggedIn ? 'Your account' : 'Account',
-                          colors: colors,
-                        ),
+                        _GroupLabel('profile_your_account'.tr, colors: colors),
                         const SizedBox(height: 8),
                         _SettingsGroup(
                           colors: colors,
                           children: [
-                            if (!loggedIn)
-                              _TappableRow(
-                                title: 'Log in',
-                                hint: 'Optional — for saving trips later',
-                                onTap: () => Get.toNamed(AppRoutes.login),
-                              )
-                            else ...[
+                            if (user.name.trim().isNotEmpty) ...[
                               _StaticRow(
-                                title: AuthService.to.user.value?.email ?? '',
-                                hint: 'This is where you’re signed in',
+                                title: user.name,
+                                hint: 'profile_full_name'.tr,
                               ),
                               const _Hairline(),
-                              _TappableRow(
-                                title: 'Log out',
-                                titleColor: colors.isDark
-                                    ? const Color(0xFFFF8A8A)
-                                    : const Color(0xFFC62828),
-                                onTap: () async {
-                                  HapticFeedback.lightImpact();
-                                  await AuthService.to.logout();
-                                },
-                              ),
                             ],
+                            if (user.firstName.trim().isNotEmpty) ...[
+                              _StaticRow(
+                                title: user.firstName,
+                                hint: 'profile_first_name'.tr,
+                              ),
+                              const _Hairline(),
+                            ],
+                            if (user.lastName.trim().isNotEmpty) ...[
+                              _StaticRow(
+                                title: user.lastName,
+                                hint: 'profile_last_name'.tr,
+                              ),
+                              const _Hairline(),
+                            ],
+                            _StaticRow(
+                              title: user.email,
+                              hint: 'profile_email'.tr,
+                            ),
+                            const _Hairline(),
+                            _TappableRow(
+                                title: 'profile_logout'.tr,
+                              titleColor: colors.isDark
+                                  ? const Color(0xFFFF8A8A)
+                                  : const Color(0xFFC62828),
+                              onTap: () async {
+                                HapticFeedback.lightImpact();
+                                await AuthService.to.logout();
+                              },
+                            ),
                           ],
                         ),
                       ],
@@ -99,7 +109,7 @@ class ProfileTabPage extends StatelessWidget {
                   const SizedBox(height: 40),
                   Center(
                     child: AppText(
-                      'FocusFlight · $_appVersion',
+                      'profile_version'.trParams({'version': _appVersion}),
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
                       color: colors.tx3,
@@ -113,20 +123,17 @@ class ProfileTabPage extends StatelessWidget {
           ],
         ),
       ),
+    ),
     );
   }
 
   static String _greeting() {
     final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
+    if (hour < 12) return 'profile_good_morning'.tr;
+    if (hour < 17) return 'profile_good_afternoon'.tr;
+    return 'profile_good_evening'.tr;
   }
 
-  static String _firstName(String? fullName) {
-    if (fullName == null || fullName.trim().isEmpty) return 'there';
-    return fullName.trim().split(RegExp(r'\s+')).first;
-  }
 }
 
 // ─── Intro (left-aligned, no hero card) ─────────────────────────────────────
@@ -136,22 +143,22 @@ class _ProfileIntro extends StatelessWidget {
     required this.greeting,
     required this.name,
     required this.email,
-    required this.isGuest,
   });
 
   final String greeting;
   final String name;
-  final String? email;
-  final bool isGuest;
+  final String email;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final initial =
+        name.isNotEmpty ? name[0].toUpperCase() : (email.isNotEmpty ? email[0].toUpperCase() : '?');
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _Avatar(initial: isGuest ? '?' : name[0].toUpperCase(), colors: colors),
+        _Avatar(initial: initial, colors: colors),
         const SizedBox(width: 16),
         Expanded(
           child: Column(
@@ -166,7 +173,7 @@ class _ProfileIntro extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               AppText(
-                isGuest ? 'Hi $name' : 'Hi, $name',
+                'profile_hi'.trParams({'name': name}),
                 fontSize: 26,
                 fontWeight: FontWeight.w700,
                 color: colors.tx1,
@@ -176,9 +183,7 @@ class _ProfileIntro extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               AppText(
-                isGuest
-                    ? 'You’re here as a guest. Nothing to set up — just pick a route when you’re ready.'
-                    : (email ?? ''),
+                email,
                 fontSize: 14,
                 fontWeight: FontWeight.w400,
                 color: colors.tx2,
@@ -299,7 +304,7 @@ class _DarkModeRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   AppText(
-                    'Dark mode',
+                    'profile_dark_mode'.tr,
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
                     color: colors.tx1,
@@ -307,7 +312,9 @@ class _DarkModeRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   AppText(
-                    isDark ? 'Easier at night' : 'Brighter during the day',
+                    isDark
+                        ? 'profile_dark_hint_on'.tr
+                        : 'profile_dark_hint_off'.tr,
                     fontSize: 13,
                     fontWeight: FontWeight.w400,
                     color: colors.tx3,
@@ -347,7 +354,7 @@ class _LanguageRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 AppText(
-                  'Language',
+                  'profile_language'.tr,
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
                   color: colors.tx1,
@@ -355,7 +362,7 @@ class _LanguageRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 AppText(
-                  'English or Lao',
+                  'profile_language_hint'.tr,
                   fontSize: 13,
                   fontWeight: FontWeight.w400,
                   color: colors.tx3,

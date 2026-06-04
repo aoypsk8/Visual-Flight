@@ -49,6 +49,9 @@ final class AppImages {
 final class AppIcons {
   AppIcons._();
 
+  // ── App logo ───────────────────────────────────────────────────────────────
+  static const String dingoCoin = '${AppAssets.icons}/dingocoin.svg';
+
   // ── Social brand (SVG) ─────────────────────────────────────────────────────
   static const String google = '${AppAssets.icons}/google.svg';
   static const String apple = '${AppAssets.icons}/apple.svg';

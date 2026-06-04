@@ -1,4 +1,4 @@
-package com.yourcompany.visual_focusflight
+package com.aoy.visualfocusflight
 
 import io.flutter.embedding.android.FlutterActivity
 

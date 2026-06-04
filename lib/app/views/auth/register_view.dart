@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../config/auth_features.dart';
 import '../../controllers/auth_controller.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/app_resources.dart';
@@ -101,19 +102,10 @@ class RegisterView extends StatelessWidget {
                               ],
                             ),
                             const SizedBox(height: 28),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 5,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.amberSoft,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const AppText.label(
-                                'FocusFlight',
-                                color: AppColors.amber,
-                              ),
+                            const AppLogo(
+                              size: 28,
+                              showLabel: true,
+                              bordered: true,
                             ),
                             const SizedBox(height: 28),
                             AppText.headline('create_account_title'.tr),
@@ -184,25 +176,27 @@ class RegisterView extends StatelessWidget {
                             const SizedBox(height: 20),
                             AppOrDivider(label: 'or_continue_with'.tr),
                             const SizedBox(height: 16),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: AppSocialButton(
-                                    iconAsset: AppIcons.google,
-                                    label: 'Google',
-                                    onTap: () {},
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: AppSocialButton(
-                                    iconAsset: AppIcons.apple,
-                                    label: 'Apple',
-                                    onTap: () {},
-                                  ),
-                                ),
-                              ],
+                            Obx(
+                              () => AppSocialButton(
+                                iconAsset: AppIcons.google,
+                                label: 'Google',
+                                onTap: ctrl.isLoading.value
+                                    ? null
+                                    : ctrl.signInWithGoogle,
+                              ),
                             ),
+                            if (AuthFeatures.appleSignInEnabled) ...[
+                              const SizedBox(height: 10),
+                              Obx(
+                                () => AppSocialButton(
+                                  iconAsset: AppIcons.apple,
+                                  label: 'Apple',
+                                  onTap: ctrl.isLoading.value
+                                      ? null
+                                      : ctrl.signInWithApple,
+                                ),
+                              ),
+                            ],
                             const Spacer(),
                             Center(
                               child: GestureDetector(
@@ -215,18 +209,18 @@ class RegisterView extends StatelessWidget {
                                     textAlign: TextAlign.center,
                                     text: TextSpan(
                                       text: '${'already_have_account'.tr}  ',
-                                      style: TextStyle(
+                                      style: AppText.styleOf(
+                                        context,
                                         color: AppColors.tx3,
                                         fontSize: 14,
-                                        fontFamily: AppText.fontFamilyOf(
-                                          context,
-                                        ),
                                       ),
                                       children: [
                                         TextSpan(
                                           text: 'go_sign_in'.tr,
-                                          style: const TextStyle(
+                                          style: AppText.styleOf(
+                                            context,
                                             color: AppColors.tx1,
+                                            fontSize: 14,
                                             fontWeight: FontWeight.w600,
                                           ),
                                         ),

@@ -305,12 +305,11 @@ class _HeroBadgeSection extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         AppText(
-          isLao ? 'ລົງຈອດແລ້ວ' : 'Touchdown complete',
+          'landing_touchdown'.tr,
           fontSize: 13,
           fontWeight: FontWeight.w500,
           color: AppColors.tx2,
           textAlign: TextAlign.center,
-          poppins: !isLao,
         ),
       ],
     );
@@ -584,7 +583,7 @@ class _BoardingPassCard extends StatelessWidget {
                     Expanded(
                       child: _StatTile(
                         icon: Icons.straighten_rounded,
-                        label: isLao ? 'ລະຍະທາງ' : 'DISTANCE',
+                        label: 'landing_stat_distance'.tr,
                         value: distance,
                       ),
                     ),
@@ -592,7 +591,7 @@ class _BoardingPassCard extends StatelessWidget {
                     Expanded(
                       child: _StatTile(
                         icon: Icons.timer_outlined,
-                        label: isLao ? 'ໂຟກັດ' : 'FOCUS TIME',
+                        label: 'landing_stat_focus'.tr,
                         value: focusTime,
                         mono: true,
                       ),
@@ -601,7 +600,7 @@ class _BoardingPassCard extends StatelessWidget {
                     Expanded(
                       child: _StatTile(
                         icon: Icons.event_seat_outlined,
-                        label: isLao ? 'ບ່ອນນັ່ງ' : 'SEAT',
+                        label: 'landing_stat_seat'.tr,
                         value: session.seatCode,
                       ),
                     ),
@@ -737,8 +736,8 @@ class _ShareButton extends StatelessWidget {
     final from = '${session.fromCode} (${session.fromCity})';
     final to = '${session.toCode} (${session.toCity})';
     return isLao
-        ? '✈️ ສຳເລັດການບິນ!\n\n$from → $to\n💺 ທີ່ນັ່ງ ${session.seatCode}  ·  📏 $distance  ·  ⏱ $focusTime\n📅 $dateStr\n\nໂຟກັດຕັ້ງແຕ່離陸ຈົນລົງຈອດດ້ວຍ FocusFlight ✨'
-        : '✈️ FocusFlight Complete!\n\n$from → $to\n💺 Seat ${session.seatCode}  ·  📏 $distance  ·  ⏱ $focusTime\n📅 $dateStr\n\nStayed focused from takeoff to landing ✨\n#FocusFlight';
+        ? '✈️ ສຳເລັດການບິນ!\n\n$from → $to\n💺 ທີ່ນັ່ງ ${session.seatCode}  ·  📏 $distance  ·  ⏱ $focusTime\n📅 $dateStr\n\nໂຟກັດຕັ້ງແຕ່離陸ຈົນລົງຈອດດ້ວຍ FoFuckDingo ✨'
+        : '✈️ FoFuckDingo Complete!\n\n$from → $to\n💺 Seat ${session.seatCode}  ·  📏 $distance  ·  ⏱ $focusTime\n📅 $dateStr\n\nStayed focused from takeoff to landing ✨\n#FoFuckDingo';
   }
 
   @override
@@ -776,11 +775,10 @@ class _ShareButton extends StatelessWidget {
                     ),
                     const SizedBox(width: 10),
                     AppText(
-                      isLao ? 'ແບ່ງປັນໃຫ້ໝູ່' : 'Share with friends',
+                      'landing_share'.tr,
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
                       color: Colors.white.withValues(alpha: 0.85),
-                      poppins: !isLao,
                     ),
                   ],
                 ),
@@ -837,11 +835,10 @@ class _HomeButton extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
                   AppText(
-                    isLao ? 'ກັບໜ້າຫຼັກ' : 'Back to home',
+                    'landing_back_home'.tr,
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
                     color: const Color(0xFF0A0B0D),
-                    poppins: !isLao,
                   ),
                 ],
               ),
