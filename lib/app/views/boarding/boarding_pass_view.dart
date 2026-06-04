@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -68,6 +69,7 @@ class _BoardingPassState extends State<BoardingPassView>
   bool _hintActive = false;
   bool _haptic20 = false;
   bool _haptic50 = false;
+  bool _launched = false;
 
   @override
   void initState() {
@@ -86,6 +88,7 @@ class _BoardingPassState extends State<BoardingPassView>
       vsync: this,
       duration: const Duration(milliseconds: 2000),
     );
+    _tearCtrl.addStatusListener(_onTearStatusChanged);
 
     _scheduleHint();
   }
@@ -187,37 +190,61 @@ class _BoardingPassState extends State<BoardingPassView>
 
   // ── Tear / snap ────────────────────────────────────────────────────────────
 
+  void _onTearStatusChanged(AnimationStatus status) {
+    if (status != AnimationStatus.completed) return;
+    if (_tearCtrl.value < 0.99) return;
+    _launchLiveIfReady();
+  }
+
   void _completeTear() {
+    if (_launched) return;
     _stopHint();
-    _tearCtrl
-        .animateTo(
-          1.0,
-          duration: const Duration(milliseconds: 480),
-          curve: Curves.easeInCubic,
-        )
-        .then((_) {
-          if (!mounted) return;
-          HapticFeedback.heavyImpact();
-          Future.delayed(const Duration(milliseconds: 200), () {
-            if (!mounted) return;
-            final session = LiveFlightSession.fromBoarding(
-              fromCode: widget.fromCode,
-              fromCity: widget.fromCity,
-              toCode: widget.toCode,
-              toCity: widget.toCity,
-              seatCode: widget.seatCode,
-              distanceKm: widget.distanceKm,
-              flightDuration: widget.flightDuration,
-              fromLat: widget.fromLat,
-              fromLng: widget.fromLng,
-              toLat: widget.toLat,
-              toLng: widget.toLng,
-            );
-            Get.off(
-              () => LiveFlightView(session: session),
-            );
-          });
-        });
+    if (_tearCtrl.value >= 0.99) {
+      _launchLiveIfReady();
+      return;
+    }
+    unawaited(
+      _tearCtrl
+          .animateTo(
+            1.0,
+            duration: const Duration(milliseconds: 480),
+            curve: Curves.easeInCubic,
+          )
+          .whenComplete(() {
+            if (_tearCtrl.value >= 0.99) _launchLiveIfReady();
+          }),
+    );
+  }
+
+  void _launchLiveIfReady() {
+    if (_launched || !mounted) return;
+    if (_tearCtrl.value < 0.99) return;
+    _launched = true;
+    HapticFeedback.heavyImpact();
+    Future.delayed(const Duration(milliseconds: 200), () {
+      if (!mounted) return;
+      final session = LiveFlightSession.fromBoarding(
+        fromCode: widget.fromCode,
+        fromCity: widget.fromCity,
+        toCode: widget.toCode,
+        toCity: widget.toCity,
+        seatCode: widget.seatCode,
+        distanceKm: widget.distanceKm,
+        flightDuration: widget.flightDuration,
+        fromLat: widget.fromLat,
+        fromLng: widget.fromLng,
+        toLat: widget.toLat,
+        toLng: widget.toLng,
+      );
+      Get.off(() => LiveFlightView(session: session));
+    });
+  }
+
+  VoidCallback? _checkInTapHandler(double t) {
+    if (_launched) return null;
+    if (t >= 0.99) return _launchLiveIfReady;
+    if (_isDragging || _tearCtrl.isAnimating) return null;
+    return _completeTear;
   }
 
   void _snapBack() {
@@ -369,9 +396,7 @@ class _BoardingPassState extends State<BoardingPassView>
                     ),
                     _CheckInButton(
                       progress: t,
-                      onTap: (!torn && !_isDragging && !_tearCtrl.isAnimating)
-                          ? _completeTear
-                          : null,
+                      onTap: _checkInTapHandler(t),
                       bottomPad: mq.padding.bottom,
                     ),
                   ],

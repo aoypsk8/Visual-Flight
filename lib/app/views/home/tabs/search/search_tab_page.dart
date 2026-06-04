@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' hide Size;
-import '../../../config/api_urls.dart';
-import '../../../controllers/search_controller.dart';
-import '../../../utils/app_colors.dart';
-import '../../../widgets/common/app_text.dart';
-import '../../../widgets/map/deferred_map_host.dart';
-import '../../../widgets/map/live_map_chrome.dart';
-import '../../../widgets/navigation/app_bottom_nav.dart';
-import 'search/route_card.dart';
-import 'search/search_route_ux.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' hide Size, Visibility;
+import '../../../../config/api_urls.dart';
+import '../../../../controllers/search_controller.dart';
+import '../../../../utils/app_colors.dart';
+import '../../../../widgets/common/app_text.dart';
+import '../../../../widgets/map/deferred_map_host.dart';
+import '../../../../widgets/map/live_map_chrome.dart';
+import '../../../../widgets/navigation/app_bottom_nav.dart';
+import 'route_card.dart';
+import 'search_route_ux.dart';
 
 /// Breakpoints and scaled spacing for Search tab on phones and tablets.
 class _SearchTabLayout {
@@ -69,7 +69,7 @@ class _SearchTabLayout {
       brandFontSize: compact ? 10 : 11,
       bottomClearance: AppBottomNav.overlayClearance(context),
       topGradientFraction: veryCompact ? 0.24 : compact ? 0.27 : 0.30,
-      bottomGradientFraction: veryCompact ? 0.48 : compact ? 0.52 : 0.55,
+      bottomGradientFraction: veryCompact ? 0.28 : compact ? 0.32 : 0.36,
       maxContentWidth: w > 520 ? 480 : null,
       sectionGap: compact ? 10 : 12,
       buttonVerticalPadding: compact ? 14 : 16,
@@ -94,6 +94,8 @@ class SearchTabPage extends StatelessWidget {
             fit: StackFit.expand,
             children: [
               DeferredMapHost(
+                immediate: true,
+                placeholderColor: const Color(0xFF080A0D),
                 onMountChanged: (mounted) {
                   if (!mounted) ctrl.onSearchMapUnmounted();
                 },
@@ -107,8 +109,25 @@ class SearchTabPage extends StatelessWidget {
                   ),
                   onMapCreated: ctrl.onMapCreated,
                   onStyleLoadedListener: ctrl.onSearchMapStyleLoaded,
+                  onTapListener: ctrl.onSearchMapTap,
                 ),
               ),
+
+              Obx(() {
+                final target = ctrl.mapPinPickTarget.value;
+                if (target == null) {
+                  return const SizedBox.shrink();
+                }
+                return Positioned(
+                  top: MediaQuery.paddingOf(context).top + 12,
+                  left: layout.horizontalInset,
+                  right: layout.horizontalInset,
+                  child: _MapPinHintBar(
+                    target: target,
+                    onCancel: ctrl.cancelMapPinPicker,
+                  ),
+                );
+              }),
 
               Positioned(
                 top: 0,
@@ -128,28 +147,37 @@ class SearchTabPage extends StatelessWidget {
                 ),
               ),
 
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                height: layout.height * layout.bottomGradientFraction,
-                child: const IgnorePointer(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.bottomCenter,
-                        end: Alignment.topCenter,
-                        colors: [
-                          Color(0xFF080A0D),
-                          Color(0xBB080A0D),
-                          Color(0x00080A0D),
-                        ],
-                        stops: [0.0, 0.62, 1.0],
+              Obx(() {
+                // โหมดปักหมุด — gradient ต่ำลง ไม่บังแผนที่
+                final pinning = ctrl.pickingOnMap;
+                final fraction = pinning
+                    ? 0.14
+                    : layout.bottomGradientFraction;
+                return Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  height: layout.height * fraction,
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          colors: [
+                            Color(0xFF080A0D).withValues(
+                              alpha: pinning ? 0.75 : 0.92,
+                            ),
+                            Color(0x88080A0D),
+                            Color(0x00080A0D),
+                          ],
+                          stops: const [0.0, 0.45, 1.0],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ),
+                );
+              }),
 
               // โหลดเส้นทางถนน (Car) — overlay บนแผนที่ ไม่บัง route card
               Obx(() {
@@ -166,63 +194,134 @@ class SearchTabPage extends StatelessWidget {
                 );
               }),
 
-              SafeArea(
-                bottom: false,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        layout.horizontalInset,
-                        layout.headerTopInset,
-                        layout.horizontalInset,
-                        0,
-                      ),
-                      child: Obx(
-                        () => _SearchTabHeader(
-                          step: ctrl.routeUxStep,
-                          travelMode: ctrl.travelMode.value,
-                          onToggleMode: ctrl.toggleTravelMode,
-                          layout: layout,
-                        ),
+              Obx(() {
+                final pinning = ctrl.pickingOnMap;
+                return IgnorePointer(
+                  ignoring: pinning,
+                  child: Visibility(
+                    visible: !pinning,
+                    maintainState: true,
+                    maintainAnimation: true,
+                    child: SafeArea(
+                      bottom: false,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Padding(
+                            padding: EdgeInsets.fromLTRB(
+                              layout.horizontalInset,
+                              layout.headerTopInset,
+                              layout.horizontalInset,
+                              0,
+                            ),
+                            child: _SearchTabHeader(
+                              step: ctrl.routeUxStep,
+                              travelMode: ctrl.travelMode.value,
+                              onToggleMode: ctrl.toggleTravelMode,
+                              layout: layout,
+                            ),
+                          ),
+                          const Spacer(),
+                          _CollapsibleRoutePanel(
+                            layout: layout,
+                            buildRouteCard: () => SearchRouteCard(
+                              from: ctrl.from.value,
+                              to: ctrl.to.value,
+                              loadingFrom: ctrl.loadingLocation.value,
+                              loadingRoadRoute: ctrl.loadingRoadRoute.value,
+                              isDriveMode: ctrl.travelMode.value ==
+                                  TravelMode.drive,
+                              step: ctrl.routeUxStep,
+                              routeLabel: ctrl.routeSummaryLabel,
+                              fromIsCurrentLocation:
+                                  ctrl.fromIsCurrentLocation,
+                              fromIsMapPin: ctrl.fromIsMapPin,
+                              toIsMapPin: ctrl.toIsMapPin,
+                              pickingFromOnMap: ctrl.mapPinPickTarget.value ==
+                                  MapPinPickTarget.from,
+                              pickingToOnMap: ctrl.mapPinPickTarget.value ==
+                                  MapPinPickTarget.to,
+                              distanceKm: ctrl.displayDistanceKm,
+                              flightDuration: ctrl.displayDuration,
+                              onFromTap: () => ctrl.pickAirport(isFrom: true),
+                              onPickFromOnMap: () =>
+                                  ctrl.startMapPinPicker(isFrom: true),
+                              onPickToOnMap: () =>
+                                  ctrl.startMapPinPicker(isFrom: false),
+                              onUseMyLocation:
+                                  ctrl.useCurrentLocationForOrigin,
+                              onToTap: () => ctrl.pickAirport(isFrom: false),
+                              onSwap: ctrl.swap,
+                            ),
+                            actionButton: _PrimaryActionButton(
+                              step: ctrl.routeUxStep,
+                              layout: layout,
+                              travelMode: ctrl.travelMode.value,
+                              loadingRoadRoute: ctrl.loadingRoadRoute.value,
+                              enabled: ctrl.primaryActionEnabled,
+                              onTap: ctrl.onPrimaryAction,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const Spacer(),
-                    Obx(
-                      () => _CollapsibleRoutePanel(
-                        layout: layout,
-                        buildRouteCard: (onHide) => SearchRouteCard(
-                          from: ctrl.from.value,
-                          to: ctrl.to.value,
-                          loadingFrom: ctrl.loadingLocation.value,
-                          loadingRoadRoute: ctrl.loadingRoadRoute.value,
-                          isDriveMode: ctrl.travelMode.value == TravelMode.drive,
-                          step: ctrl.routeUxStep,
-                          routeLabel: ctrl.routeSummaryLabel,
-                          fromIsCurrentLocation: ctrl.fromIsCurrentLocation,
-                          distanceKm: ctrl.displayDistanceKm,
-                          flightDuration: ctrl.displayDuration,
-                          onFromTap: () => ctrl.pickAirport(isFrom: true),
-                          onToTap: () => ctrl.pickAirport(isFrom: false),
-                          onSwap: ctrl.swap,
-                          onCollapse: onHide,
-                        ),
-                        actionButton: _PrimaryActionButton(
-                          step: ctrl.routeUxStep,
-                          layout: layout,
-                          travelMode: ctrl.travelMode.value,
-                          loadingRoadRoute: ctrl.loadingRoadRoute.value,
-                          enabled: ctrl.primaryActionEnabled,
-                          onTap: ctrl.onPrimaryAction,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+                  ),
+                );
+              }),
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+/// Shown while user is placing a route endpoint pin on the map.
+class _MapPinHintBar extends StatelessWidget {
+  const _MapPinHintBar({required this.target, required this.onCancel});
+
+  final MapPinPickTarget target;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xE816181D),
+      borderRadius: BorderRadius.circular(14),
+      elevation: 6,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          children: [
+            Icon(
+              Icons.touch_app_rounded,
+              size: 20,
+              color: AppColors.amber.withValues(alpha: 0.9),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: AppText(
+                target == MapPinPickTarget.from
+                    ? 'Tap the map to set your start point'
+                    : 'Tap the map to set your destination',
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.white.withValues(alpha: 0.9),
+                poppins: true,
+              ),
+            ),
+            TextButton(
+              onPressed: onCancel,
+              child: AppText(
+                'Cancel',
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.amber,
+                poppins: true,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -304,7 +403,7 @@ class _CollapsibleRoutePanel extends StatefulWidget {
   });
 
   final _SearchTabLayout layout;
-  final Widget Function(VoidCallback onHide) buildRouteCard;
+  final Widget Function() buildRouteCard;
   final Widget actionButton;
 
   @override
@@ -319,9 +418,10 @@ class _CollapsibleRoutePanelState extends State<_CollapsibleRoutePanel>
   late final Animation<double> _reveal;
   late final Animation<double> _cardScale;
 
-  bool get _expanded =>
-      _controller.status != AnimationStatus.dismissed &&
-      _controller.value > 0.01;
+  bool get _isFullyOpen => _controller.status == AnimationStatus.completed;
+  bool get _isFullyClosed => _controller.status == AnimationStatus.dismissed;
+
+  bool _wasExpandedBeforePin = true;
 
   @override
   void initState() {
@@ -339,11 +439,15 @@ class _CollapsibleRoutePanelState extends State<_CollapsibleRoutePanel>
         reverseCurve: Curves.easeInCubic,
       ),
     );
-    _fabOpacity = ReverseAnimation(_reveal);
     _controller.value = 1;
+    _controller.addStatusListener((_) {
+      if (mounted) setState(() {});
+    });
+    ever(
+      FlightSearchController.instance.mapPinPickTarget,
+      (t) => _onMapPinModeChanged(t != null),
+    );
   }
-
-  late final Animation<double> _fabOpacity;
 
   @override
   void dispose() {
@@ -351,14 +455,30 @@ class _CollapsibleRoutePanelState extends State<_CollapsibleRoutePanel>
     super.dispose();
   }
 
+  void _onMapPinModeChanged(bool pinning) {
+    if (!mounted) return;
+    if (pinning) {
+      _wasExpandedBeforePin = _controller.value > 0.5;
+    } else if (_wasExpandedBeforePin) {
+      if (_isFullyClosed) _controller.forward();
+    } else if (!_isFullyClosed && _controller.value > 0.05) {
+      _controller.reverse();
+    }
+    setState(() {});
+  }
+
   void _hide() {
-    if (!_expanded) return;
+    if (_isFullyClosed || _controller.status == AnimationStatus.reverse) {
+      return;
+    }
     HapticFeedback.selectionClick();
     _controller.reverse();
   }
 
   void _show() {
-    if (_expanded) return;
+    if (_isFullyOpen || _controller.status == AnimationStatus.forward) {
+      return;
+    }
     HapticFeedback.selectionClick();
     _controller.forward();
   }
@@ -366,6 +486,8 @@ class _CollapsibleRoutePanelState extends State<_CollapsibleRoutePanel>
   @override
   Widget build(BuildContext context) {
     final layout = widget.layout;
+    // แผงรับ tap เฉพาะตอนเปิดเกือบเต็ม — กัน layer โปร่งใสบังหลัง collapse
+    final panelPointerEnabled = _controller.value > 0.92;
 
     return Align(
       alignment: Alignment.bottomCenter,
@@ -380,59 +502,75 @@ class _CollapsibleRoutePanelState extends State<_CollapsibleRoutePanel>
             layout.horizontalInset,
             layout.bottomClearance,
           ),
-          child: Stack(
-            clipBehavior: Clip.none,
-            alignment: Alignment.bottomRight,
-            children: [
-              IgnorePointer(
-                ignoring: !_expanded,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    ClipRect(
-                      child: Align(
-                        alignment: Alignment.bottomRight,
-                        heightFactor: 1,
-                        child: ScaleTransition(
-                          scale: _cardScale,
-                          alignment: Alignment.bottomRight,
-                          child: FadeTransition(
-                            opacity: _reveal,
-                            child: widget.buildRouteCard(_hide),
-                          ),
-                        ),
-                      ),
-                    ),
-                    ClipRect(
-                      child: Align(
-                        alignment: Alignment.bottomCenter,
-                        heightFactor: 1,
-                        child: SizeTransition(
-                          sizeFactor: _reveal,
-                          axisAlignment: 1,
-                          child: FadeTransition(
-                            opacity: _reveal,
-                            child: Padding(
-                              padding:
-                                  EdgeInsets.only(top: layout.sectionGap),
-                              child: widget.actionButton,
+          child: SizedBox(
+            width: double.infinity,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                // ต้องมี non-positioned child เสมอ — กัน Stack assert ตอนแผงปิด
+                IgnorePointer(
+                  ignoring: !panelPointerEnabled,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (_controller.value > 0.001) ...[
+                        ClipRect(
+                          child: Align(
+                            alignment: Alignment.bottomRight,
+                            heightFactor: 1,
+                            child: ScaleTransition(
+                              scale: _cardScale,
+                              alignment: Alignment.bottomRight,
+                              child: FadeTransition(
+                                opacity: _reveal,
+                                child: widget.buildRouteCard(),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                  ],
+                        ClipRect(
+                          child: Align(
+                            alignment: Alignment.bottomCenter,
+                            heightFactor: 1,
+                            child: SizeTransition(
+                              sizeFactor: _reveal,
+                              axisAlignment: 1,
+                              child: FadeTransition(
+                                opacity: _reveal,
+                                child: Padding(
+                                  padding: EdgeInsets.only(
+                                    top: layout.sectionGap,
+                                    right:
+                                        _RoutePanelAirplaneToggle.size + 8,
+                                  ),
+                                  child: widget.actionButton,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                      SizedBox(height: _RoutePanelAirplaneToggle.size + 4),
+                    ],
+                  ),
                 ),
-              ),
-              FadeTransition(
-                opacity: _fabOpacity,
-                child: IgnorePointer(
-                  ignoring: _expanded,
-                  child: _RoutePanelAirplaneToggle(onTap: _show),
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: AnimatedBuilder(
+                    animation: _controller,
+                    builder: (context, child) {
+                      final expanded = _controller.value > 0.5;
+                      return _RoutePanelAirplaneToggle(
+                        collapsed: !expanded,
+                        onTap: expanded ? _hide : _show,
+                      );
+                    },
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -440,10 +578,14 @@ class _CollapsibleRoutePanelState extends State<_CollapsibleRoutePanel>
   }
 }
 
-/// Circular show/hide control — airplane icon, bottom-right.
+/// มุมล่างขวา — ไอคอนยุบเมื่อแผงเปิด / เครื่องบินเมื่อแผงปิด
 class _RoutePanelAirplaneToggle extends StatelessWidget {
-  const _RoutePanelAirplaneToggle({required this.onTap});
+  const _RoutePanelAirplaneToggle({
+    required this.collapsed,
+    required this.onTap,
+  });
 
+  final bool collapsed;
   final VoidCallback onTap;
 
   static const double size = 52;
@@ -452,11 +594,16 @@ class _RoutePanelAirplaneToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: 'Show route panel',
+      label: collapsed ? 'Show route panel' : 'Hide route panel',
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: onTap,
+          onTap: () {
+            HapticFeedback.selectionClick();
+            onTap();
+          },
+          splashColor: Colors.transparent,
+          highlightColor: Colors.white.withValues(alpha: 0.06),
           customBorder: const CircleBorder(),
           child: Ink(
             width: size,
@@ -470,20 +617,22 @@ class _RoutePanelAirplaneToggle extends StatelessWidget {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.4),
-                  blurRadius: 18,
-                  offset: const Offset(0, 6),
-                ),
-                BoxShadow(
-                  color: AppColors.amber.withValues(alpha: 0.22),
-                  blurRadius: 14,
+                  color: Colors.black.withValues(alpha: 0.35),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
-            child: Icon(
-              Icons.flight_rounded,
-              size: 24,
-              color: AppColors.amber.withValues(alpha: 0.9),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: Icon(
+                collapsed
+                    ? Icons.flight_rounded
+                    : Icons.keyboard_double_arrow_down_rounded,
+                key: ValueKey(collapsed),
+                size: collapsed ? 24 : 22,
+                color: AppColors.amber.withValues(alpha: 0.9),
+              ),
             ),
           ),
         ),

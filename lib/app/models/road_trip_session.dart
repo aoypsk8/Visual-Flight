@@ -3,7 +3,7 @@ import 'dart:math' as math;
 /// Active road-trip focus session (single source of truth for the road-trip
 /// live screen). Mirrors [LiveFlightSession] but models a car journey.
 class RoadTripSession {
-  const RoadTripSession({
+  RoadTripSession({
     required this.fromCity,
     required this.fromCountry,
     required this.toCity,
@@ -61,6 +61,9 @@ class RoadTripSession {
   /// polyline rather than great-circle.
   final List<List<double>> routeCoords;
 
+  /// Cached arc-length table for [routeCoords] (built once per session).
+  List<double>? _cumDistCache;
+
   // ---------------------------------------------------------------------------
   // Derived helpers
   // ---------------------------------------------------------------------------
@@ -92,24 +95,75 @@ class RoadTripSession {
       );
     }
 
-    // Build cumulative distances (in degrees, good enough for interpolation).
     final coords = routeCoords;
     final n = coords.length;
     if (n == 1) return (coords[0][1], coords[0][0]);
 
+    final cumDist = _routeCumulativeDistances();
+    final totalDist = cumDist[n - 1];
+    if (totalDist == 0) return (coords[0][1], coords[0][0]);
+
+    final target = p * totalDist;
+    final (lo, hi, t) = _segmentAt(cumDist, target);
+    final lon = coords[lo][0] + (coords[hi][0] - coords[lo][0]) * t;
+    final lat = coords[lo][1] + (coords[hi][1] - coords[lo][1]) * t;
+    return (lat, lon);
+  }
+
+  /// Flown polyline [[lon, lat], ...] for map layers — same math as [positionAt].
+  List<List<double>> routeSliceAt(double progress) {
+    final p = progress.clamp(0.0, 1.0);
+
+    if (routeCoords.isEmpty) {
+      final (lat, lng) = positionAt(p);
+      return [
+        [fromLng, fromLat],
+        [lng, lat],
+      ];
+    }
+
+    final coords = routeCoords;
+    final n = coords.length;
+    if (n < 2) return coords;
+    if (p <= 0) return [coords.first];
+    if (p >= 1) return coords;
+
+    final cumDist = _routeCumulativeDistances();
+    final total = cumDist[n - 1];
+    if (total == 0) return [coords.first];
+
+    final target = p * total;
+    final (lo, hi, t) = _segmentAt(cumDist, target);
+    return [
+      ...coords.sublist(0, hi),
+      [
+        coords[lo][0] + (coords[hi][0] - coords[lo][0]) * t,
+        coords[lo][1] + (coords[hi][1] - coords[lo][1]) * t,
+      ],
+    ];
+  }
+
+  List<double> _routeCumulativeDistances() {
+    final cached = _cumDistCache;
+    if (cached != null) return cached;
+
+    final coords = routeCoords;
+    final n = coords.length;
     final cumDist = List<double>.filled(n, 0.0);
     for (var i = 1; i < n; i++) {
       final dLon = coords[i][0] - coords[i - 1][0];
       final dLat = coords[i][1] - coords[i - 1][1];
       cumDist[i] = cumDist[i - 1] + math.sqrt(dLon * dLon + dLat * dLat);
     }
+    _cumDistCache = cumDist;
+    return cumDist;
+  }
 
-    final totalDist = cumDist[n - 1];
-    if (totalDist == 0) return (coords[0][1], coords[0][0]);
-
-    final target = p * totalDist;
-
-    // Binary search for the segment that contains [target].
+  static (int lo, int hi, double t) _segmentAt(
+    List<double> cumDist,
+    double target,
+  ) {
+    final n = cumDist.length;
     var lo = 0;
     var hi = n - 1;
     while (lo < hi - 1) {
@@ -120,13 +174,9 @@ class RoadTripSession {
         hi = mid;
       }
     }
-
     final segLen = cumDist[hi] - cumDist[lo];
     final t = segLen == 0 ? 0.0 : (target - cumDist[lo]) / segLen;
-
-    final lon = coords[lo][0] + (coords[hi][0] - coords[lo][0]) * t;
-    final lat = coords[lo][1] + (coords[hi][1] - coords[lo][1]) * t;
-    return (lat, lon);
+    return (lo, hi, t);
   }
 
   /// Bearing in degrees (0 = north, clockwise) at the given [progress],
@@ -135,7 +185,8 @@ class RoadTripSession {
   /// Uses a small forward delta to approximate the tangent. Useful for
   /// rotating a car icon to face the direction of travel.
   double bearingAt(double progress) {
-    const delta = 0.001; // 0.1 % of the route
+    // Look slightly ahead for stable heading on dense polylines.
+    const delta = 0.004;
     final p1 = progress.clamp(0.0, 1.0);
     final p2 = (progress + delta).clamp(0.0, 1.0);
 

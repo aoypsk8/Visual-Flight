@@ -20,8 +20,8 @@ dependencies:
   dio: ^5.4.3+1
   pretty_dio_logger: ^1.3.1
 
-  # ── Storage ────────────────────────────────────────────────────────────────
-  get_storage: ^2.1.1
+  # ── Storage (shared_preferences — stable on iOS Simulator) ─────────────────
+  shared_preferences: ^2.3.3
 
   # ── Fonts & Typography ─────────────────────────────────────────────────────
   google_fonts: ^6.2.1

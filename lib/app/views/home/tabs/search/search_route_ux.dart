@@ -1,3 +1,6 @@
+/// Which route endpoint the user is placing via map tap.
+enum MapPinPickTarget { from, to }
+
 /// Search tab route-building steps for copy and UI state.
 enum SearchRouteUxStep {
   findingOrigin,

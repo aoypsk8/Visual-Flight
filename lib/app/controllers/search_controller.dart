@@ -12,8 +12,8 @@ import '../services/location_service.dart';
 import '../utils/flight_route_utils.dart';
 import '../views/road/road_seat_view.dart';
 import '../views/seat/seat_selection_view.dart';
-import '../views/home/pages/search/airport_picker_sheet.dart';
-import '../views/home/pages/search/search_route_ux.dart';
+import '../views/home/tabs/search/airport_picker_sheet.dart';
+import '../views/home/tabs/search/search_route_ux.dart';
 
 enum TravelMode { fly, drive }
 
@@ -114,23 +114,44 @@ class FlightSearchController extends GetxController {
   final fromLat = Rxn<double>();
   final fromLng = Rxn<double>();
   final to = Rxn<Airport>(); // null until destination is chosen
+  /// Map pin coordinates for TO (when [_toIsMapPin]).
+  final toLat = Rxn<double>();
+  final toLng = Rxn<double>();
   final loadingLocation = true.obs;
 
   /// true = route origin uses GPS; false = user picked a FROM airport manually.
   bool _fromPinnedToAirport = false;
 
+  /// User placed origin by tapping the search map.
+  bool _fromIsMapPin = false;
+
+  /// User placed destination by tapping the search map.
+  bool _toIsMapPin = false;
+
+  /// Active map pin mode (FROM or TO); null = not picking.
+  final mapPinPickTarget = Rxn<MapPinPickTarget>();
+
+  bool get pickingOnMap => mapPinPickTarget.value != null;
+
+  bool get toIsMapPin => _toIsMapPin;
+
   /// FROM is the device position, not the airport coordinates from the list.
   bool get fromIsCurrentLocation =>
-      !_fromPinnedToAirport && fromLat.value != null && fromLng.value != null;
+      !_fromPinnedToAirport &&
+      !_fromIsMapPin &&
+      fromLat.value != null &&
+      fromLng.value != null;
+
+  bool get fromIsMapPin => _fromIsMapPin;
 
   /// Great-circle distance in km when FROM and TO are set.
   double? get routeDistanceKm {
-    final dest = to.value;
-    if (dest == null) return null;
+    final destCoords = _destinationCoords();
     final coords = _originCoords();
-    if (coords == null) return null;
+    if (coords == null || destCoords == null) return null;
     final (lat, lng) = coords;
-    return FlightRouteUtils.distanceKm(lat, lng, dest.lat, dest.lng);
+    final (destLat, destLng) = destCoords;
+    return FlightRouteUtils.distanceKm(lat, lng, destLat, destLng);
   }
 
   /// Estimated block time.
@@ -196,6 +217,8 @@ class FlightSearchController extends GetxController {
     try {
       final pos = await _locationService.getCurrentPosition();
       _fromPinnedToAirport = false;
+      _fromIsMapPin = false;
+      mapPinPickTarget.value = null;
       if (pos != null) {
         fromLat.value = pos.latitude;
         fromLng.value = pos.longitude;
@@ -238,14 +261,104 @@ class FlightSearchController extends GetxController {
     fromLng.value = null;
   }
 
-  /// Route origin coordinates — device GPS when [fromIsCurrentLocation], else airport.
+  /// Route origin — GPS / map pin use [fromLat]/[fromLng]; airport picker uses airport coords.
   (double lat, double lng)? _originCoords() {
     final airport = from.value;
     if (airport == null) return null;
-    if (fromIsCurrentLocation) {
+    if ((fromIsCurrentLocation || fromIsMapPin) &&
+        fromLat.value != null &&
+        fromLng.value != null) {
       return (fromLat.value!, fromLng.value!);
     }
     return (airport.lat, airport.lng);
+  }
+
+  (double lat, double lng)? _destinationCoords() {
+    final airport = to.value;
+    if (airport == null) return null;
+    if (_toIsMapPin && toLat.value != null && toLng.value != null) {
+      return (toLat.value!, toLng.value!);
+    }
+    return (airport.lat, airport.lng);
+  }
+
+  void startMapPinPicker({required bool isFrom}) {
+    final target =
+        isFrom ? MapPinPickTarget.from : MapPinPickTarget.to;
+    if (mapPinPickTarget.value == target) {
+      cancelMapPinPicker();
+      return;
+    }
+    mapPinPickTarget.value = target;
+    HapticFeedback.selectionClick();
+  }
+
+  void cancelMapPinPicker() {
+    mapPinPickTarget.value = null;
+  }
+
+  void onSearchMapTap(MapContentGestureContext context) {
+    final target = mapPinPickTarget.value;
+    if (target == null) return;
+    final coords = context.point.coordinates;
+    final lat = coords.lat.toDouble();
+    final lng = coords.lng.toDouble();
+    switch (target) {
+      case MapPinPickTarget.from:
+        unawaited(_applyMapPinOrigin(lat, lng));
+      case MapPinPickTarget.to:
+        unawaited(_applyMapPinDestination(lat, lng));
+    }
+  }
+
+  Future<void> _applyMapPinOrigin(double lat, double lng) async {
+    final gen = ++_locationResolveGen;
+    loadingLocation.value = true;
+    mapPinPickTarget.value = null;
+    try {
+      _fromPinnedToAirport = false;
+      _fromIsMapPin = true;
+      fromLat.value = lat;
+      fromLng.value = lng;
+      from.value = await _airportRepo.findNearestAirport(lat, lng);
+      if (gen != _locationResolveGen) return;
+      if (from.value == null) await _applyFallbackOrigin();
+    } finally {
+      if (gen == _locationResolveGen) loadingLocation.value = false;
+    }
+    if (gen != _locationResolveGen) return;
+    await _updateRoute();
+    if (_styleLayersAdded && mapCtrl != null) {
+      await _fitCamera(animate: true);
+    }
+    HapticFeedback.lightImpact();
+  }
+
+  Future<void> _applyMapPinDestination(double lat, double lng) async {
+    mapPinPickTarget.value = null;
+    try {
+      _toIsMapPin = true;
+      toLat.value = lat;
+      toLng.value = lng;
+      to.value = await _airportRepo.findNearestAirport(lat, lng);
+    } finally {}
+    if (to.value == null) {
+      _toIsMapPin = false;
+      toLat.value = null;
+      toLng.value = null;
+      return;
+    }
+    await _updateRoute();
+    if (_styleLayersAdded && mapCtrl != null) {
+      await _fitCamera(animate: true);
+    }
+    HapticFeedback.lightImpact();
+  }
+
+  Future<void> useCurrentLocationForOrigin() async {
+    mapPinPickTarget.value = null;
+    _fromIsMapPin = false;
+    await _resolveFromNearestAirport();
   }
 
   // ── Map lifecycle ──────────────────────────────────────────────────────────
@@ -476,11 +589,15 @@ class FlightSearchController extends GetxController {
     loadingRoadRoute.value = true;
     final (originLat, originLng) = origin;
 
+    final destCoords = _destinationCoords();
+    if (destCoords == null) return;
+    final (destLat, destLng) = destCoords;
+
     final result = await _roadRouteRepo.fetchDrivingRoute(
       fromLat: originLat,
       fromLng: originLng,
-      toLat: dest.lat,
-      toLng: dest.lng,
+      toLat: destLat,
+      toLng: destLng,
     );
 
     if (gen != _roadFetchGen) return;
@@ -572,11 +689,14 @@ class FlightSearchController extends GetxController {
         bearing: 0.0,
       );
     } else {
-      final midLat = (originLat + dest.lat) / 2;
-      final midLng = (originLng + dest.lng) / 2;
+      final destCoords = _destinationCoords();
+      if (destCoords == null) return;
+      final (destLat, destLng) = destCoords;
+      final midLat = (originLat + destLat) / 2;
+      final midLng = (originLng + destLng) / 2;
       final span = math.max(
-        (originLat - dest.lat).abs(),
-        (originLng - dest.lng).abs(),
+        (originLat - destLat).abs(),
+        (originLng - destLng).abs(),
       );
       final zoom = span < 3
           ? 8.0
@@ -616,7 +736,9 @@ class FlightSearchController extends GetxController {
       {
         'type': 'Feature',
         'properties': {
-          'code': fromIsCurrentLocation ? 'GPS' : origin.code,
+          'code': fromIsMapPin
+              ? 'PIN'
+              : (fromIsCurrentLocation ? 'GPS' : origin.code),
           'kind': 'from',
         },
         'geometry': {
@@ -626,14 +748,21 @@ class FlightSearchController extends GetxController {
       },
     ];
     if (dest != null) {
-      features.add({
-        'type': 'Feature',
-        'properties': {'code': dest.code, 'kind': 'to'},
-        'geometry': {
-          'type': 'Point',
-          'coordinates': [dest.lng, dest.lat],
-        },
-      });
+      final destCoords = _destinationCoords();
+      if (destCoords != null) {
+        final (destLat, destLng) = destCoords;
+        features.add({
+          'type': 'Feature',
+          'properties': {
+            'code': toIsMapPin ? 'PIN' : dest.code,
+            'kind': 'to',
+          },
+          'geometry': {
+            'type': 'Point',
+            'coordinates': [destLng, destLat],
+          },
+        });
+      }
     }
     return jsonEncode({'type': 'FeatureCollection', 'features': features});
   }
@@ -692,14 +821,15 @@ class FlightSearchController extends GetxController {
 
   List<List<double>> _greatCircleArc({int n = 60}) {
     final coords = _originCoords();
-    final dest = to.value;
-    if (coords == null || dest == null) return [];
+    final destCoords = _destinationCoords();
+    if (coords == null || destCoords == null) return [];
 
     final (originLat, originLng) = coords;
+    final (destLat, destLng) = destCoords;
     final r1 = originLat * math.pi / 180;
     final o1 = originLng * math.pi / 180;
-    final r2 = dest.lat * math.pi / 180;
-    final o2 = dest.lng * math.pi / 180;
+    final r2 = destLat * math.pi / 180;
+    final o2 = destLng * math.pi / 180;
     final d =
         2 *
         math.asin(
@@ -713,7 +843,7 @@ class FlightSearchController extends GetxController {
     if (d < 0.0001) {
       return [
         [originLng, originLat],
-        [dest.lng, dest.lat],
+        [destLng, destLat],
       ];
     }
 
@@ -742,8 +872,13 @@ class FlightSearchController extends GetxController {
     if (origin == null || dest == null) return;
     HapticFeedback.lightImpact();
     _fromPinnedToAirport = true;
+    _fromIsMapPin = false;
+    _toIsMapPin = false;
+    mapPinPickTarget.value = null;
     fromLat.value = null;
     fromLng.value = null;
+    toLat.value = null;
+    toLng.value = null;
     from.value = dest;
     to.value = origin;
     unawaited(_updateRoute());
@@ -753,6 +888,13 @@ class FlightSearchController extends GetxController {
     if (isFrom) {
       _locationResolveGen++;
       loadingLocation.value = false;
+      mapPinPickTarget.value = null;
+      _fromIsMapPin = false;
+    } else {
+      mapPinPickTarget.value = null;
+      _toIsMapPin = false;
+      toLat.value = null;
+      toLng.value = null;
     }
     final result = await showModalBottomSheet<Airport>(
       context: Get.context!,
@@ -770,6 +912,9 @@ class FlightSearchController extends GetxController {
       fromLng.value = null;
       from.value = result;
     } else {
+      _toIsMapPin = false;
+      toLat.value = null;
+      toLng.value = null;
       to.value = result;
     }
     await _updateRoute();
@@ -781,6 +926,7 @@ class FlightSearchController extends GetxController {
     final dest = to.value!;
     HapticFeedback.mediumImpact();
     final (originLat, originLng) = _originCoords()!;
+    final (destLat, destLng) = _destinationCoords()!;
     Get.to(
       () => SeatSelectionView(
         fromCode: origin.code,
@@ -791,8 +937,8 @@ class FlightSearchController extends GetxController {
         flightDuration: routeFlightDuration,
         fromLat: originLat,
         fromLng: originLng,
-        toLat: dest.lat,
-        toLng: dest.lng,
+        toLat: destLat,
+        toLng: destLng,
       ),
     );
   }
@@ -808,6 +954,7 @@ class FlightSearchController extends GetxController {
     final dest = to.value!;
     HapticFeedback.mediumImpact();
     final (originLat, originLng) = _originCoords()!;
+    final (destLat, destLng) = _destinationCoords()!;
     final coords = List<List<double>>.from(roadRouteCoords);
     final km = roadDistanceKm.value ?? routeDistanceKm ?? 0.0;
     final dur =
@@ -821,8 +968,8 @@ class FlightSearchController extends GetxController {
         toCountry: dest.country,
         fromLat: originLat,
         fromLng: originLng,
-        toLat: dest.lat,
-        toLng: dest.lng,
+        toLat: destLat,
+        toLng: destLng,
         distanceKm: km,
         duration: dur,
         routeCoords: coords,

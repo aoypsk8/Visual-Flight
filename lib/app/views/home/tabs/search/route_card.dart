@@ -14,11 +14,18 @@ class SearchRouteCard extends StatelessWidget {
   final bool loadingRoadRoute;
   final bool isDriveMode;
   final bool fromIsCurrentLocation;
+  final bool fromIsMapPin;
+  final bool toIsMapPin;
+  final bool pickingFromOnMap;
+  final bool pickingToOnMap;
   final double? distanceKm;
   final Duration? flightDuration;
   final SearchRouteUxStep step;
   final String? routeLabel;
   final VoidCallback onFromTap;
+  final VoidCallback onPickFromOnMap;
+  final VoidCallback onUseMyLocation;
+  final VoidCallback onPickToOnMap;
   final VoidCallback onToTap;
   final VoidCallback onSwap;
   /// When set, shows a “−” control in the card header to collapse the panel.
@@ -33,10 +40,17 @@ class SearchRouteCard extends StatelessWidget {
     this.isDriveMode = false,
     required this.step,
     this.fromIsCurrentLocation = false,
+    this.fromIsMapPin = false,
+    this.toIsMapPin = false,
+    this.pickingFromOnMap = false,
+    this.pickingToOnMap = false,
     this.distanceKm,
     this.flightDuration,
     this.routeLabel,
     required this.onFromTap,
+    required this.onPickFromOnMap,
+    required this.onUseMyLocation,
+    required this.onPickToOnMap,
     required this.onToTap,
     required this.onSwap,
     this.onCollapse,
@@ -78,12 +92,28 @@ class SearchRouteCard extends StatelessWidget {
           SearchAirportRow(
             role: 'FROM',
             airport: from,
-            icon: Icons.my_location_rounded,
+            icon: fromIsMapPin
+                ? Icons.push_pin_rounded
+                : Icons.my_location_rounded,
             isTop: routeLabel == null && onCollapse == null,
             isLoading: loadingFrom,
             isCurrentLocation: fromIsCurrentLocation,
+            isMapPin: fromIsMapPin,
             onTap: onFromTap,
           ),
+          if (!loadingFrom)
+            _EndpointPinChips(
+              pickingOnMap: pickingFromOnMap,
+              onPickOnMap: onPickFromOnMap,
+              secondary: fromIsMapPin ||
+                      (from != null && !fromIsCurrentLocation)
+                  ? _OriginChip(
+                      icon: Icons.near_me_outlined,
+                      label: 'My location',
+                      onTap: onUseMyLocation,
+                    )
+                  : null,
+            ),
           _ConnectorRow(
             step: step,
             loadingRoadRoute: loadingRoadRoute,
@@ -93,10 +123,22 @@ class SearchRouteCard extends StatelessWidget {
           SearchAirportRow(
             role: 'TO',
             airport: to,
-            icon: Icons.flight_land_rounded,
+            icon: toIsMapPin
+                ? Icons.push_pin_rounded
+                : Icons.flight_land_rounded,
             isTop: false,
             emphasize: _emphasizeDestination,
+            isMapPin: toIsMapPin,
             onTap: onToTap,
+          ),
+          _EndpointPinChips(
+            pickingOnMap: pickingToOnMap,
+            onPickOnMap: onPickToOnMap,
+            secondary: _OriginChip(
+              icon: Icons.search_rounded,
+              label: 'Search',
+              onTap: onToTap,
+            ),
           ),
           AnimatedSize(
             duration: const Duration(milliseconds: 240),
@@ -113,6 +155,104 @@ class SearchRouteCard extends StatelessWidget {
                     : const SizedBox(width: double.infinity, height: 0),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Drop pin on map; optional second chip (GPS / search list).
+class _EndpointPinChips extends StatelessWidget {
+  const _EndpointPinChips({
+    required this.pickingOnMap,
+    required this.onPickOnMap,
+    this.secondary,
+  });
+
+  final bool pickingOnMap;
+  final VoidCallback onPickOnMap;
+  final Widget? secondary;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
+      child: Row(
+        children: [
+          _OriginChip(
+            icon: Icons.push_pin_outlined,
+            label: pickingOnMap ? 'Tap map…' : 'Drop pin',
+            active: pickingOnMap,
+            onTap: onPickOnMap,
+          ),
+          if (secondary != null) ...[
+            const SizedBox(width: 8),
+            secondary!,
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _OriginChip extends StatelessWidget {
+  const _OriginChip({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.active = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        borderRadius: BorderRadius.circular(999),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            color: active
+                ? AppColors.amber.withValues(alpha: 0.18)
+                : Colors.white.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: active
+                  ? AppColors.amber.withValues(alpha: 0.45)
+                  : Colors.white.withValues(alpha: 0.1),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 14,
+                color: active
+                    ? AppColors.amber
+                    : Colors.white.withValues(alpha: 0.55),
+              ),
+              const SizedBox(width: 6),
+              AppText(
+                label,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: active
+                    ? AppColors.amber
+                    : Colors.white.withValues(alpha: 0.65),
+                poppins: true,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

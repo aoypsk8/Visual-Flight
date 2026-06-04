@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -70,6 +71,7 @@ class _RoadTripPassState extends State<RoadTripPassView>
   bool _hintActive = false;
   bool _haptic20 = false;
   bool _haptic50 = false;
+  bool _launched = false;
 
   @override
   void initState() {
@@ -89,6 +91,7 @@ class _RoadTripPassState extends State<RoadTripPassView>
       vsync: this,
       duration: const Duration(milliseconds: 2000),
     );
+    _tearCtrl.addStatusListener(_onTearStatusChanged);
 
     _scheduleHint();
   }
@@ -189,37 +192,63 @@ class _RoadTripPassState extends State<RoadTripPassView>
 
   // ── Tear / snap ────────────────────────────────────────────────────────────
 
+  void _onTearStatusChanged(AnimationStatus status) {
+    if (status != AnimationStatus.completed) return;
+    if (_tearCtrl.value < 0.99) return;
+    _launchLiveIfReady();
+  }
+
   void _completeTear() {
+    if (_launched) return;
     _stopHint();
-    _tearCtrl
-        .animateTo(
-          1.0,
-          duration: const Duration(milliseconds: 480),
-          curve: Curves.easeInCubic,
-        )
-        .then((_) {
-          if (!mounted) return;
-          HapticFeedback.heavyImpact();
-          Future.delayed(const Duration(milliseconds: 200), () {
-            if (!mounted) return;
-            final session = RoadTripSession(
-              fromCity: widget.fromCity,
-              fromCountry: widget.fromCountry,
-              toCity: widget.toCity,
-              toCountry: widget.toCountry,
-              seatCode: widget.seatCode,
-              totalKm: widget.distanceKm,
-              totalSeconds: widget.duration.inSeconds,
-              startedAt: DateTime.now(),
-              fromLat: widget.fromLat ?? 0.0,
-              fromLng: widget.fromLng ?? 0.0,
-              toLat: widget.toLat ?? 0.0,
-              toLng: widget.toLng ?? 0.0,
-              routeCoords: widget.routeCoords,
-            );
-            Get.off(() => RoadLiveView(session: session));
-          });
-        });
+    if (_tearCtrl.value >= 0.99) {
+      _launchLiveIfReady();
+      return;
+    }
+    unawaited(
+      _tearCtrl
+          .animateTo(
+            1.0,
+            duration: const Duration(milliseconds: 480),
+            curve: Curves.easeInCubic,
+          )
+          .whenComplete(() {
+            if (_tearCtrl.value >= 0.99) _launchLiveIfReady();
+          }),
+    );
+  }
+
+  void _launchLiveIfReady() {
+    if (_launched || !mounted) return;
+    if (_tearCtrl.value < 0.99) return;
+    _launched = true;
+    HapticFeedback.heavyImpact();
+    Future.delayed(const Duration(milliseconds: 200), () {
+      if (!mounted) return;
+      final session = RoadTripSession(
+        fromCity: widget.fromCity,
+        fromCountry: widget.fromCountry,
+        toCity: widget.toCity,
+        toCountry: widget.toCountry,
+        seatCode: widget.seatCode,
+        totalKm: widget.distanceKm,
+        totalSeconds: widget.duration.inSeconds,
+        startedAt: DateTime.now(),
+        fromLat: widget.fromLat ?? 0.0,
+        fromLng: widget.fromLng ?? 0.0,
+        toLat: widget.toLat ?? 0.0,
+        toLng: widget.toLng ?? 0.0,
+        routeCoords: widget.routeCoords,
+      );
+      Get.off(() => RoadLiveView(session: session));
+    });
+  }
+
+  VoidCallback? _startDriveTapHandler(double t) {
+    if (_launched) return null;
+    if (t >= 0.99) return _launchLiveIfReady;
+    if (_isDragging || _tearCtrl.isAnimating) return null;
+    return _completeTear;
   }
 
   void _snapBack() {
@@ -372,11 +401,7 @@ class _RoadTripPassState extends State<RoadTripPassView>
                     ),
                     _RoadStartButton(
                       progress: t,
-                      onTap: (!torn &&
-                              !_isDragging &&
-                              !_tearCtrl.isAnimating)
-                          ? _completeTear
-                          : null,
+                      onTap: _startDriveTapHandler(t),
                       bottomPad: mq.padding.bottom,
                     ),
                   ],

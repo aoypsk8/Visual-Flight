@@ -1,5 +1,5 @@
 import 'package:get/get.dart';
-import 'package:get_storage/get_storage.dart';
+import 'app_local_storage.dart';
 import '../models/user_model.dart';
 import '../repositories/auth_repository.dart';
 import 'api/api_exception.dart';
@@ -14,8 +14,6 @@ class AuthService extends GetxService {
   static const _userKey  = 'auth_user';
 
   final AuthRepository _repo;
-  final _box = GetStorage();
-
   final user = Rxn<UserModel>();
   bool get isLoggedIn => user.value != null;
 
@@ -30,7 +28,7 @@ class AuthService extends GetxService {
   }
 
   void _restoreSession() {
-    final raw = _box.read<Map?>(_userKey);
+    final raw = AppLocalStorage.readJsonMap(_userKey);
     if (raw != null) {
       user.value = UserModel.fromJson(Map<String, dynamic>.from(raw));
     }
@@ -82,19 +80,21 @@ class AuthService extends GetxService {
     _clearSession();
   }
 
-  String? get token => _box.read<String>(_tokenKey);
+  String? get token => AppLocalStorage.readString(_tokenKey);
 
   // ── Private helpers ──────────────────────────────────────────────────────────
 
   void _saveSession(UserModel u) {
     user.value = u;
-    if (u.token != null) _box.write(_tokenKey, u.token);
-    _box.write(_userKey, u.toJson());
+    if (u.token != null) {
+      AppLocalStorage.writeString(_tokenKey, u.token!);
+    }
+    AppLocalStorage.writeJsonMap(_userKey, u.toJson());
   }
 
   void _clearSession() {
     user.value = null;
-    _box.remove(_tokenKey);
-    _box.remove(_userKey);
+    AppLocalStorage.remove(_tokenKey);
+    AppLocalStorage.remove(_userKey);
   }
 }

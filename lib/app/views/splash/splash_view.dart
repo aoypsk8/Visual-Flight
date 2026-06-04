@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:get_storage/get_storage.dart';
+import '../../services/app_local_storage.dart';
 import 'package:lottie/lottie.dart';
 
 import '../../routes/app_routes.dart';
@@ -56,7 +56,7 @@ class _SplashViewState extends State<SplashView> with TickerProviderStateMixin {
  
   void _goToLogin() {
     _navigated = true;
-    final done = GetStorage().read<bool>('onboarding_done') ?? false;
+    final done = AppLocalStorage.readBool('onboarding_done') ?? false;
     Get.offNamed(done ? AppRoutes.login : AppRoutes.onboarding);
   }
 

@@ -12,6 +12,7 @@ import '../../repositories/road_route_repository.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/flight_route_utils.dart';
 import '../../widgets/common/app_text.dart';
+import '../../widgets/common/hold_to_end_button.dart';
 import 'road_arrival_view.dart';
 import 'road_live_map_layer.dart';
 
@@ -32,8 +33,8 @@ class _RoadLiveViewState extends State<RoadLiveView>
     with TickerProviderStateMixin {
   late RoadTripSession _session;
   late final AnimationController _endAnimCtrl;
+  late final ValueNotifier<double> _progressNotifier;
   Ticker? _liveTicker;
-  double _progress = 0;
   bool _isEnding = false;
   bool _uiHidden = false;
   bool _completionScheduled = false;
@@ -43,6 +44,7 @@ class _RoadLiveViewState extends State<RoadLiveView>
   void initState() {
     super.initState();
     _session = widget.session;
+    _progressNotifier = ValueNotifier(_session.progressAt(DateTime.now()));
     _endAnimCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 520),
@@ -54,6 +56,7 @@ class _RoadLiveViewState extends State<RoadLiveView>
   @override
   void dispose() {
     _liveTicker?.dispose();
+    _progressNotifier.dispose();
     _endAnimCtrl.dispose();
     super.dispose();
   }
@@ -65,7 +68,7 @@ class _RoadLiveViewState extends State<RoadLiveView>
       _scheduleCompletion();
       return;
     }
-    if (p != _progress) setState(() => _progress = p);
+    if (p != _progressNotifier.value) _progressNotifier.value = p;
   }
 
   void _scheduleCompletion() {
@@ -104,13 +107,14 @@ class _RoadLiveViewState extends State<RoadLiveView>
 
   @override
   Widget build(BuildContext context) {
-    final derived = _RoadDerived(
-      progress: _progress,
-      session: _session,
-    );
     final mq = MediaQuery.of(context);
-    const hudBodyHeight = 188.0;
-    final mapControlsBottom = hudBodyHeight + mq.padding.bottom + 24;
+    const hudBodyHeight = 152.0;
+    final mapControlsBottom = hudBodyHeight + mq.padding.bottom + 20;
+    final holdBottom = HoldToEndLayout.bottomInset(
+      mq: mq,
+      hudBodyHeight: hudBodyHeight,
+      hudOuterBottomPadding: 12,
+    );
 
     return Scaffold(
       backgroundColor: const Color(0xFF0C0D10),
@@ -121,11 +125,12 @@ class _RoadLiveViewState extends State<RoadLiveView>
             opacity: Tween<double>(begin: 1, end: 0.35).animate(
               CurvedAnimation(parent: _endAnimCtrl, curve: Curves.easeIn),
             ),
-            child: RoadLiveMapLayer(
-              session: _session,
-              progress: _progress,
-              uiHidden: _uiHidden,
-              controlsBottomInset: mapControlsBottom,
+            child: RepaintBoundary(
+              child: RoadLiveMapLayer(
+                session: _session,
+                uiHidden: _uiHidden,
+                controlsBottomInset: mapControlsBottom,
+              ),
             ),
           ),
           AnimatedOpacity(
@@ -137,41 +142,73 @@ class _RoadLiveViewState extends State<RoadLiveView>
               child: const _RoadLegibilityScrim(),
             ),
           ),
-          AnimatedOpacity(
-            opacity: _uiHidden ? 0 : 1,
-            duration: const Duration(milliseconds: 280),
-            curve: Curves.easeOut,
-            child: IgnorePointer(
-              ignoring: _uiHidden,
-              child: SafeArea(
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _RoadLiveTopBar(session: _session),
-                        const Spacer(),
-                        _RoadHud(
-                          derived: derived,
-                          progress: _progress,
-                          holdEnabled: !_isEnding,
-                          onHoldComplete: _onHoldStopComplete,
+          ValueListenableBuilder<double>(
+            valueListenable: _progressNotifier,
+            builder: (context, progress, _) {
+              final derived = _RoadDerived(
+                progress: progress,
+                session: _session,
+              );
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  AnimatedOpacity(
+                    opacity: _uiHidden ? 0 : 1,
+                    duration: const Duration(milliseconds: 280),
+                    curve: Curves.easeOut,
+                    child: IgnorePointer(
+                      ignoring: _uiHidden,
+                      child: SafeArea(
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _RoadLiveTopBar(session: _session),
+                                const Spacer(),
+                                _RoadHud(
+                                  derived: derived,
+                                  progress: progress,
+                                ),
+                              ],
+                            ),
+                            Positioned(
+                              right: 16,
+                              bottom: holdBottom,
+                              child: HoldToEndButton(
+                                enabled: !_isEnding,
+                                onHoldComplete: _onHoldStopComplete,
+                                idleHint: 'Hold 3 s to end drive',
+                                semanticsLabel:
+                                    'Hold for three seconds to end drive',
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    Positioned(
-                      right: 72,
-                      bottom: mapControlsBottom - 52,
-                      child: _HoldToEndButton(
-                        enabled: !_isEnding,
-                        onHoldComplete: _onHoldStopComplete,
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ),
+                  ),
+                  AnimatedOpacity(
+                    opacity: _uiHidden ? 1 : 0,
+                    duration: const Duration(milliseconds: 280),
+                    curve: Curves.easeOut,
+                    child: IgnorePointer(
+                      ignoring: !_uiHidden,
+                      child: SafeArea(
+                        child: Align(
+                          alignment: Alignment.bottomCenter,
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 20),
+                            child: _CompactStatsPill(derived: derived),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
           SafeArea(
             child: Align(
@@ -181,23 +218,6 @@ class _RoadLiveViewState extends State<RoadLiveView>
                 child: _RoadImmersiveToggle(
                   hidden: _uiHidden,
                   onPressed: _toggleUiHidden,
-                ),
-              ),
-            ),
-          ),
-          AnimatedOpacity(
-            opacity: _uiHidden ? 1 : 0,
-            duration: const Duration(milliseconds: 280),
-            curve: Curves.easeOut,
-            child: IgnorePointer(
-              ignoring: !_uiHidden,
-              child: SafeArea(
-                child: Align(
-                  alignment: Alignment.bottomCenter,
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 20),
-                    child: _CompactStatsPill(derived: derived),
-                  ),
                 ),
               ),
             ),
@@ -242,20 +262,41 @@ class _RoadLegibilityScrim extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final h = MediaQuery.sizeOf(context).height;
     return IgnorePointer(
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              const Color(0xFF0C0D10).withValues(alpha: 0.45),
-              Colors.transparent,
-              const Color(0xFF0C0D10).withValues(alpha: 0.55),
-            ],
-            stops: const [0.0, 0.42, 1.0],
+      child: Stack(
+        children: [
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: h * 0.20,
+            child: const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xAA0C0D10), Color(0x000C0D10)],
+                ),
+              ),
+            ),
           ),
-        ),
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: h * 0.26,
+            child: const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  colors: [Color(0x990C0D10), Color(0x000C0D10)],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -485,14 +526,10 @@ class _RoadHud extends StatelessWidget {
   const _RoadHud({
     required this.derived,
     required this.progress,
-    required this.holdEnabled,
-    required this.onHoldComplete,
   });
 
   final _RoadDerived derived;
   final double progress;
-  final bool holdEnabled;
-  final VoidCallback onHoldComplete;
 
   @override
   Widget build(BuildContext context) {
@@ -511,7 +548,7 @@ class _RoadHud extends StatelessWidget {
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
               child: Container(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
                 decoration: BoxDecoration(
                   color: Colors.black.withValues(alpha: 0.52),
                   borderRadius: BorderRadius.circular(24),
@@ -543,7 +580,7 @@ class _RoadHud extends StatelessWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 10),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -568,19 +605,19 @@ class _RoadHud extends StatelessWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(3),
                       child: LinearProgressIndicator(
                         value: progress,
-                        minHeight: 5,
+                        minHeight: 4,
                         backgroundColor:
                             Colors.white.withValues(alpha: 0.10),
                         valueColor:
                             const AlwaysStoppedAnimation(AppColors.amber),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
                     Center(
                       child: AppText(
                         'DRIVING  ${derived.elapsedTimeStr}',
@@ -650,116 +687,8 @@ class _VertDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: 1,
-      height: 44,
+      height: 38,
       color: Colors.white.withValues(alpha: 0.08),
-    );
-  }
-}
-
-class _HoldToEndButton extends StatefulWidget {
-  const _HoldToEndButton({
-    required this.enabled,
-    required this.onHoldComplete,
-  });
-
-  final bool enabled;
-  final VoidCallback onHoldComplete;
-
-  @override
-  State<_HoldToEndButton> createState() => _HoldToEndButtonState();
-}
-
-class _HoldToEndButtonState extends State<_HoldToEndButton>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _holdCtrl;
-  bool _holding = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _holdCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2800),
-    );
-    _holdCtrl.addStatusListener((s) {
-      if (s == AnimationStatus.completed && _holding) {
-        widget.onHoldComplete();
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _holdCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onLongPressStart: (_) {
-        if (!widget.enabled) return;
-        _holding = true;
-        HapticFeedback.lightImpact();
-        _holdCtrl.forward(from: 0);
-      },
-      onLongPressEnd: (_) {
-        _holding = false;
-        _holdCtrl.animateTo(0, duration: const Duration(milliseconds: 300));
-      },
-      onLongPressCancel: () {
-        _holding = false;
-        _holdCtrl.animateTo(0, duration: const Duration(milliseconds: 300));
-      },
-      child: AnimatedBuilder(
-        animation: _holdCtrl,
-        builder: (context, _) {
-          final t = _holdCtrl.value;
-          return ClipRRect(
-            borderRadius: BorderRadius.circular(50),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: Color.lerp(
-                    Colors.black.withValues(alpha: 0.50),
-                    AppColors.amber.withValues(alpha: 0.85),
-                    t,
-                  ),
-                  borderRadius: BorderRadius.circular(50),
-                  border: Border.all(
-                    color: Color.lerp(
-                      Colors.white.withValues(alpha: 0.12),
-                      AppColors.amber,
-                      t,
-                    )!,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.flag_rounded,
-                      size: 14,
-                      color: Colors.white.withValues(alpha: 0.70 + 0.30 * t),
-                    ),
-                    const SizedBox(width: 6),
-                    AppText(
-                      t > 0.05 ? 'Release to end…' : 'Hold to end',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white.withValues(alpha: 0.70 + 0.30 * t),
-                      poppins: true,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
     );
   }
 }

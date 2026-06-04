@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:get_storage/get_storage.dart';
+import '../services/app_local_storage.dart';
 
 class ThemeController extends GetxController {
   static ThemeController get to => Get.find();
 
   static const _key = 'is_dark';
-  final _box = GetStorage();
-
-  late final isDark = (_box.read<bool>(_key) ?? true).obs;
+  late final isDark = (AppLocalStorage.readBool(_key) ?? true).obs;
 
   ThemeMode get themeMode =>
       isDark.value ? ThemeMode.dark : ThemeMode.light;
@@ -22,7 +20,7 @@ class ThemeController extends GetxController {
 
   void toggle() {
     isDark.value = !isDark.value;
-    _box.write(_key, isDark.value);
+    AppLocalStorage.writeBool(_key, isDark.value);
     Get.changeThemeMode(themeMode);
     _applySystemChrome(isDark.value);
   }

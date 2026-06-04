@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
-import '../../../controllers/theme_controller.dart';
-import '../../../routes/app_routes.dart';
-import '../../../services/auth_service.dart';
-import '../../../utils/app_theme.dart';
-import '../../../widgets/common/app_language_toggle.dart';
-import '../../../widgets/common/app_text.dart';
+import '../../../../controllers/theme_controller.dart';
+import '../../../../routes/app_routes.dart';
+import '../../../../services/auth_service.dart';
+import '../../../../utils/app_theme.dart';
+import '../../../../widgets/common/app_language_toggle.dart';
+import '../../../../widgets/common/app_text.dart';
 
 /// Profile — simple, personal settings (no marketing chrome).
 class ProfileTabPage extends StatelessWidget {

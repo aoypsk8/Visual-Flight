@@ -8,7 +8,7 @@ import 'app_text.dart';
 // AppLanguageToggle
 //
 // Compact inline toggle showing supported locales.
-// Tapping a pill switches the app language instantly (persisted via GetStorage).
+// Tapping a pill switches the app language instantly (persisted locally).
 //
 // Usage:
 //   const AppLanguageToggle()          // default horizontal row

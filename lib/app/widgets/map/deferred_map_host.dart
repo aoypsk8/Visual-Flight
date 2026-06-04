@@ -11,6 +11,8 @@ class DeferredMapHost extends StatefulWidget {
     this.minWidth = 200,
     this.minHeight = 200,
     this.placeholderColor = const Color(0xFF0C0D10),
+    /// Mount map on first valid layout (search tab full-screen — no 250ms wait).
+    this.immediate = false,
   });
 
   final Widget Function(BuildContext context) builder;
@@ -19,6 +21,7 @@ class DeferredMapHost extends StatefulWidget {
   final double minWidth;
   final double minHeight;
   final Color placeholderColor;
+  final bool immediate;
 
   @override
   State<DeferredMapHost> createState() => _DeferredMapHostState();
@@ -30,6 +33,7 @@ class _DeferredMapHostState extends State<DeferredMapHost> {
 
   bool _mountMap = false;
   bool _layoutCallbackScheduled = false;
+  bool _mountReported = false;
   Size? _trackedSize;
   int _sameSizeFrames = 0;
   Timer? _mountTimer;
@@ -38,7 +42,16 @@ class _DeferredMapHostState extends State<DeferredMapHost> {
   @override
   void dispose() {
     _mountTimer?.cancel();
+    if (_mountReported) {
+      widget.onMountChanged?.call(false);
+    }
     super.dispose();
+  }
+
+  void _reportMount(bool mounted) {
+    if (_mountReported == mounted) return;
+    _mountReported = mounted;
+    widget.onMountChanged?.call(mounted);
   }
 
   bool _isValid(BoxConstraints c) {
@@ -62,11 +75,13 @@ class _DeferredMapHostState extends State<DeferredMapHost> {
   void _setMounted(bool value) {
     if (_mountMap == value) return;
     _mountMap = value;
-    widget.onMountChanged?.call(value);
+    _reportMount(value);
     if (mounted) setState(() {});
   }
 
   void _evaluateConstraints(BoxConstraints constraints) {
+    if (widget.immediate) return;
+
     if (!_isValid(constraints)) {
       _sameSizeFrames = 0;
       _trackedSize = null;
@@ -107,13 +122,19 @@ class _DeferredMapHostState extends State<DeferredMapHost> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        _scheduleLayoutCheck(constraints);
+        final valid = _isValid(constraints);
+        final showMap = widget.immediate ? valid : _mountMap && valid;
 
-        if (!_mountMap || !_isValid(constraints)) {
+        if (widget.immediate) {
+          _reportMount(showMap);
+        } else {
+          _scheduleLayoutCheck(constraints);
+        }
+
+        if (!showMap) {
           return ColoredBox(color: widget.placeholderColor);
         }
 
-        // Enforce explicit size before creating native MapView
         return SizedBox(
           width: constraints.maxWidth,
           height: constraints.maxHeight,

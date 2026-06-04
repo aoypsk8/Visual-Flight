@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:get_storage/get_storage.dart';
+import '../services/app_local_storage.dart';
 
 class LocaleController extends GetxController {
   static LocaleController get to => Get.find();
 
   static const _storageKey = 'locale';
-
-  final _box = GetStorage();
 
   // Supported locales
   static const List<AppLocale> supported = [
@@ -20,7 +18,7 @@ class LocaleController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    final saved = _box.read<String>(_storageKey);
+    final saved = AppLocalStorage.readString(_storageKey);
     final initial = _localeFrom(saved) ?? Get.deviceLocale ?? const Locale('en', 'US');
     current = _clamp(initial).obs;
     Get.updateLocale(current.value);
@@ -35,7 +33,7 @@ class LocaleController extends GetxController {
     if (current.value == locale) return;
 
     current.value = locale;
-    _box.write(_storageKey, '${found.code}_${found.country}');
+    AppLocalStorage.writeString(_storageKey, '${found.code}_${found.country}');
     Get.updateLocale(locale);
     Get.forceAppUpdate();
   }

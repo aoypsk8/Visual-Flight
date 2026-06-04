@@ -11,6 +11,7 @@ class SearchAirportRow extends StatelessWidget {
   final VoidCallback onTap;
   final bool isLoading;
   final bool isCurrentLocation;
+  final bool isMapPin;
   final bool emphasize;
 
   const SearchAirportRow({
@@ -22,6 +23,7 @@ class SearchAirportRow extends StatelessWidget {
     required this.onTap,
     this.isLoading = false,
     this.isCurrentLocation = false,
+    this.isMapPin = false,
     this.emphasize = false,
   });
 
@@ -146,6 +148,22 @@ class SearchAirportRow extends StatelessWidget {
                         ),
                         poppins: true,
                       ),
+                    ] else if (isMapPin) ...[
+                      AppText(
+                        'Pinned on map',
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                        poppins: true,
+                        letterSpacing: -0.3,
+                      ),
+                      const SizedBox(height: 2),
+                      AppText(
+                        'Near ${airport!.city} · ${airport!.code}',
+                        fontSize: 11,
+                        color: Colors.white.withValues(alpha: 0.38),
+                        poppins: true,
+                      ),
                     ] else if (isCurrentLocation) ...[
                       AppText(
                         'Current location',
@@ -208,6 +226,12 @@ class SearchAirportRow extends StatelessWidget {
                   child: isCurrentLocation
                       ? const Icon(
                           Icons.gps_fixed_rounded,
+                          size: 18,
+                          color: AppColors.amber,
+                        )
+                      : isMapPin
+                      ? const Icon(
+                          Icons.push_pin_rounded,
                           size: 18,
                           color: AppColors.amber,
                         )

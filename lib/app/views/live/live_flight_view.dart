@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
@@ -13,6 +12,7 @@ import '../../services/live_flight_session_store.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/live_flight_progress.dart';
 import '../../widgets/common/app_text.dart';
+import '../../widgets/common/hold_to_end_button.dart';
 import 'landing_view.dart';
 import 'live_flight_map_layer.dart';
 
@@ -114,6 +114,15 @@ class _LiveFlightViewState extends State<LiveFlightView>
 
   @override
   Widget build(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    // ความสูงเนื้อหา HUD โดยประมาณ (ไม่รวม safe area) — ใช้จัดตำแหน่งปุ่ม hold
+    const flightHudBodyHeight = 168.0;
+    final holdBottom = HoldToEndLayout.bottomInset(
+      mq: mq,
+      hudBodyHeight: flightHudBodyHeight,
+      hudOuterBottomPadding: 16,
+    );
+
     final derived = LiveFlightProgress(
       progress: _progress,
       totalMin: _session.totalSeconds / 60.0,
@@ -163,20 +172,19 @@ class _LiveFlightViewState extends State<LiveFlightView>
                           session: _session,
                           derived: derived,
                           progress: _progress,
-                          holdEnabled: !_isEnding,
-                          onHoldComplete: _onHoldStopComplete,
                         ),
                       ],
                     ),
                     // ปุ่ม hold — มุมขวาเหนือ HUD (ไม่ถูก Column stretch ดึงกลางจอ)
                     Positioned(
                       right: 16,
-                      bottom: 228,
-                      child: _HoldToEndFlightButton(
+                      bottom: holdBottom,
+                      child: HoldToEndButton(
                         enabled: !_isEnding,
                         onHoldComplete: _onHoldStopComplete,
-                        compact: true,
-                        alignEnd: true,
+                        idleHint: 'Hold 3 s to end flight',
+                        semanticsLabel:
+                            'Hold for three seconds to end flight',
                       ),
                     ),
                   ],
@@ -776,15 +784,11 @@ class _LiveFlightHud extends StatelessWidget {
     required this.session,
     required this.derived,
     required this.progress,
-    required this.onHoldComplete,
-    this.holdEnabled = true,
   });
 
   final LiveFlightSession session;
   final LiveFlightProgress derived;
   final double progress;
-  final VoidCallback onHoldComplete;
-  final bool holdEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -998,241 +1002,6 @@ class _ReadOnlyScrubber extends StatelessWidget {
       ],
     );
   }
-}
-
-/// Hold 3 seconds to end the focus session early (live progress keeps running while holding).
-class _HoldToEndFlightButton extends StatefulWidget {
-  const _HoldToEndFlightButton({
-    required this.onHoldComplete,
-    this.enabled = true,
-    this.compact = false,
-    this.alignEnd = false,
-  });
-
-  final VoidCallback onHoldComplete;
-  final bool enabled;
-  final bool compact;
-  /// จัดชิดขวาเมื่อวางใน Positioned มุมขวาจอ
-  final bool alignEnd;
-
-  @override
-  State<_HoldToEndFlightButton> createState() => _HoldToEndFlightButtonState();
-}
-
-class _HoldToEndFlightButtonState extends State<_HoldToEndFlightButton>
-    with SingleTickerProviderStateMixin {
-  static const _holdDuration = Duration(seconds: 3);
-
-  late final AnimationController _holdCtrl;
-  bool _holding = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _holdCtrl = AnimationController(vsync: this, duration: _holdDuration)
-      ..addStatusListener(_onHoldStatus);
-  }
-
-  @override
-  void dispose() {
-    _holdCtrl.removeStatusListener(_onHoldStatus);
-    _holdCtrl.dispose();
-    super.dispose();
-  }
-
-  void _onHoldStatus(AnimationStatus status) {
-    if (status == AnimationStatus.completed && _holding) {
-      _holding = false;
-      widget.onHoldComplete();
-    }
-  }
-
-  void _pointerDown(PointerDownEvent _) {
-    if (!widget.enabled || _holding) return;
-    _holding = true;
-    HapticFeedback.lightImpact();
-    _holdCtrl.forward(from: _holdCtrl.value);
-  }
-
-  void _pointerUp(PointerUpEvent _) {
-    if (!_holding) return;
-    _holding = false;
-    if (_holdCtrl.status != AnimationStatus.completed) {
-      _holdCtrl.reverse();
-      HapticFeedback.selectionClick();
-    }
-  }
-
-  void _pointerCancel(PointerCancelEvent _) {
-    if (!_holding) return;
-    _holding = false;
-    _holdCtrl.reverse();
-  }
-
-  double get _circleSize => widget.compact ? 64.0 : 76.0;
-
-  @override
-  Widget build(BuildContext context) {
-    final size = _circleSize;
-    return Padding(
-      padding: EdgeInsets.only(bottom: widget.compact ? 0 : 8),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment:
-            widget.alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.center,
-        children: [
-          Listener(
-              onPointerDown: widget.enabled ? _pointerDown : null,
-              onPointerUp: widget.enabled ? _pointerUp : null,
-              onPointerCancel: widget.enabled ? _pointerCancel : null,
-              child: AnimatedBuilder(
-                animation: _holdCtrl,
-                builder: (context, child) {
-                  final t = _holdCtrl.value.clamp(0.0, 1.0);
-                  final secsLeft =
-                      ((_holdDuration.inMilliseconds * (1 - t)) / 1000)
-                          .ceil()
-                          .clamp(0, 3);
-
-                  return Semantics(
-                    button: true,
-                    label: 'Hold for three seconds to end flight',
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeOut,
-                      width: size,
-                      height: size,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        boxShadow: _holding
-                            ? [
-                                BoxShadow(
-                                  color: AppColors.amber
-                                      .withValues(alpha: 0.22 * t),
-                                  blurRadius: 18,
-                                  spreadRadius: 1,
-                                ),
-                              ]
-                            : null,
-                      ),
-                      child: ClipOval(
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            CustomPaint(
-                              size: Size(size, size),
-                              painter: _HoldCircleFillPainter(
-                                progress: t,
-                                holding: _holding,
-                              ),
-                            ),
-                            Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  _holding
-                                      ? Icons.stop_rounded
-                                      : Icons.touch_app_outlined,
-                                  size: widget.compact ? 22 : 26,
-                                  color: _holding
-                                      ? (t > 0.4
-                                          ? Colors.white
-                                          : AppColors.amber)
-                                      : Colors.white.withValues(alpha: 0.5),
-                                ),
-                                if (_holding) ...[
-                                  const SizedBox(height: 2),
-                                  AppText(
-                                    '$secsLeft',
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w800,
-                                    color: t > 0.4
-                                        ? Colors.white
-                                        : AppColors.amber,
-                                    poppins: true,
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          SizedBox(height: widget.compact ? 6 : 8),
-          AppText(
-            _holding ? 'Release to cancel' : 'Hold 3 s to end flight',
-            fontSize: widget.compact ? 11 : 12,
-            fontWeight: FontWeight.w600,
-            color: _holding
-                ? AppColors.amber.withValues(alpha: 0.9)
-                : Colors.white.withValues(alpha: 0.5),
-            poppins: true,
-            textAlign: widget.alignEnd ? TextAlign.right : TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// เติมสีวงกลมแบบ sweep ตามเวลากดค้าง (เริ่มจากด้านบน หมุนตามเข็มนาฬิกา)
-class _HoldCircleFillPainter extends CustomPainter {
-  _HoldCircleFillPainter({required this.progress, required this.holding});
-
-  final double progress;
-  final bool holding;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.shortestSide / 2;
-    final rect = Rect.fromCircle(center: center, radius: radius);
-
-    canvas.drawCircle(
-      center,
-      radius,
-      Paint()..color = const Color(0xFF16181D).withValues(alpha: 0.92),
-    );
-
-    if (progress > 0) {
-      final fill = Paint()
-        ..shader = SweepGradient(
-          startAngle: -math.pi / 2,
-          endAngle: 3 * math.pi / 2,
-          colors: [
-            AppColors.amber.withValues(alpha: 0.5 + 0.25 * progress),
-            const Color(0xFFE8A838).withValues(alpha: 0.85),
-            AppColors.amber.withValues(alpha: 0.55 + 0.3 * progress),
-          ],
-          stops: const [0.0, 0.55, 1.0],
-          transform: GradientRotation(-math.pi / 2),
-        ).createShader(rect);
-
-      canvas.drawArc(
-        rect,
-        -math.pi / 2,
-        math.pi * 2 * progress,
-        true,
-        fill,
-      );
-    }
-
-    final border = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = holding ? 2 : 1.5
-      ..color = holding
-          ? AppColors.amber.withValues(alpha: 0.5 + 0.25 * progress)
-          : Colors.white.withValues(alpha: 0.14);
-    canvas.drawCircle(center, radius - border.strokeWidth / 2, border);
-  }
-
-  @override
-  bool shouldRepaint(covariant _HoldCircleFillPainter old) =>
-      old.progress != progress || old.holding != holding;
 }
 
 class _EndingFlightOverlay extends StatelessWidget {

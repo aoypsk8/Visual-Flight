@@ -5,7 +5,7 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart'
     show MapboxOptions;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:get/get.dart';
-import 'package:get_storage/get_storage.dart';
+import 'app/services/app_local_storage.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sizer/sizer.dart';
 import 'app/bindings/initial_binding.dart';
@@ -22,7 +22,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env');
   MapboxOptions.setAccessToken(AppEnv.mapboxToken);
-  await GetStorage.init();
+  await AppLocalStorage.init();
   await AppTranslations.load();
   Get.put(LocaleController(), permanent: true);
   Get.put(ThemeController(), permanent: true);

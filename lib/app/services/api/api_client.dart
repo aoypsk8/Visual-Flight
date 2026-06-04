@@ -1,5 +1,5 @@
 import 'package:dio/dio.dart';
-import 'package:get_storage/get_storage.dart';
+import '../app_local_storage.dart';
 import 'package:pretty_dio_logger/pretty_dio_logger.dart';
 
 import '../../config/api_urls.dart';
@@ -178,11 +178,9 @@ class ApiClient {
 }
 
 class _AuthInterceptor extends Interceptor {
-  final _box = GetStorage();
-
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
-    final token = _box.read<String>('auth_token');
+    final token = AppLocalStorage.readString('auth_token');
     if (token != null) {
       options.headers['Authorization'] = 'Bearer $token';
     }

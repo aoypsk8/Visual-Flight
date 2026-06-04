@@ -18,14 +18,12 @@ class RoadLiveMapLayer extends StatefulWidget {
   const RoadLiveMapLayer({
     super.key,
     required this.session,
-    required this.progress,
     this.uiHidden = false,
     /// Bottom inset so map controls don't overlap the HUD
     this.controlsBottomInset = 228,
   });
 
   final RoadTripSession session;
-  final double progress;
   final bool uiHidden;
   final double controlsBottomInset;
 
@@ -35,8 +33,12 @@ class RoadLiveMapLayer extends StatefulWidget {
 
 class _RoadLiveMapLayerState extends State<RoadLiveMapLayer>
     with TickerProviderStateMixin {
-  static const double _camLerp = 0.26;
-  static const double _bearingLerp = 0.14;
+  static const double _progressLerp = 0.24;
+  static const double _bearingLerp = 0.18;
+  static const int _carGeoMs = 32;
+  static const int _flownLineMs = 48;
+  /// ดันแผนที่ขึ้นเล็กน้อยให้จุดบนเส้นทางตรงกับไอคอนรถกลางจอ (pitch 3D)
+  static const double _followPaddingFactor = 0.18;
   static const double _minZoom = 2.5;
   static const double _maxZoom = 19.0;
   static const double _zoomStep = 0.85;
@@ -60,9 +62,7 @@ class _RoadLiveMapLayerState extends State<RoadLiveMapLayer>
   double? _routeZoom;
   double? _followZoom;
   double _displayBearing = 0;
-  double _smoothLng = 0;
-  double _smoothLat = 0;
-  bool _smoothCamInit = false;
+  double _displayProgress = 0;
 
   LiveMapStyleOption _mapStyle =
       LiveMapStyleOptions.byId(LiveMapStyleOptions.defaultId);
@@ -72,11 +72,11 @@ class _RoadLiveMapLayerState extends State<RoadLiveMapLayer>
   Ticker? _trackTicker;
   Timer? _zoomGestureEndTimer;
 
-  int _lastCarUpdateMs = 0;
+  double _trackProgress = 0;
+  int _trackFrameGen = 0;
   int _lastFlownMs = 0;
+  int _lastCarGeoMs = 0;
   int _lastPercentMs = 0;
-  int _lastCameraMs = 0;
-  static const int _cameraMinIntervalMs = 100;
   DateTime _ignoreUserGesturesUntil = DateTime.fromMillisecondsSinceEpoch(0);
 
   bool get _canTouchMap =>
@@ -110,7 +110,67 @@ class _RoadLiveMapLayerState extends State<RoadLiveMapLayer>
       vsync: this,
       duration: const Duration(milliseconds: 2200),
     )..repeat();
-    _percentNotifier.value = (widget.progress * 100).round();
+    _displayProgress = _progressNow();
+    _trackProgress = _displayProgress;
+    _percentNotifier.value = (_trackProgress * 100).round();
+  }
+
+  void _resetDisplayProgress() {
+    _displayProgress = _progressNow();
+    _trackProgress = _displayProgress;
+  }
+
+  void _advanceDisplayProgress(Duration elapsed) {
+    final target = _progressNow();
+    final dt = (elapsed.inMicroseconds / 1e6).clamp(0.001, 0.05);
+    final step = 1 - math.pow(1 - _progressLerp, dt * 60.0);
+    _displayProgress += (target - _displayProgress) * step;
+    if ((target - _displayProgress).abs() < 0.00005) {
+      _displayProgress = target;
+    }
+  }
+
+  Future<void> _safeCircleUpdate(CircleAnnotation annotation) async {
+    final mgr = _haloMgr;
+    if (!_canTouchMap || mgr == null) return;
+    try {
+      await mgr.update(annotation);
+    } catch (_) {}
+  }
+
+  Future<void> _safeCarUpdate(CircleAnnotation annotation) async {
+    final mgr = _carMgr;
+    if (!_canTouchMap || mgr == null) return;
+    try {
+      await mgr.update(annotation);
+    } catch (_) {}
+  }
+
+  bool _shouldUpdateFlownLine(bool following) {
+    if (following) return true;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now - _lastFlownMs < _flownLineMs) return false;
+    _lastFlownMs = now;
+    return true;
+  }
+
+  Future<void> _syncCarGlowVisibility(bool following) async {
+    final map = _map;
+    if (map == null || !_canTouchMap) return;
+    try {
+      await map.style.setStyleLayerProperty(
+        'road-car-glow',
+        'circle-opacity',
+        following ? 0.0 : 0.30,
+      );
+    } catch (_) {}
+  }
+
+  bool _shouldUpdateCarGeo() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now - _lastCarGeoMs < _carGeoMs) return false;
+    _lastCarGeoMs = now;
+    return true;
   }
 
   @override
@@ -130,25 +190,13 @@ class _RoadLiveMapLayerState extends State<RoadLiveMapLayer>
 
   double _progressNow() => widget.session.progressAt(DateTime.now());
 
-  List<double> _posNow() {
-    final p = _progressNow();
-    final (lat, lng) = widget.session.positionAt(p);
+  List<double> _posAt(double progress) {
+    final (lat, lng) = widget.session.positionAt(progress);
     return [lng, lat];
   }
 
-  double _bearingNow() => widget.session.bearingAt(_progressNow());
-
-  List<double> _smoothPosition(List<double> pos) {
-    if (!_smoothCamInit) {
-      _smoothLng = pos[0];
-      _smoothLat = pos[1];
-      _smoothCamInit = true;
-      return pos;
-    }
-    _smoothLng += (pos[0] - _smoothLng) * _camLerp;
-    _smoothLat += (pos[1] - _smoothLat) * _camLerp;
-    return [_smoothLng, _smoothLat];
-  }
+  double _bearingAt(double progress) =>
+      widget.session.bearingAt(progress);
 
   static double _bearingDelta(double from, double to) {
     var d = to - from;
@@ -247,7 +295,7 @@ class _RoadLiveMapLayerState extends State<RoadLiveMapLayer>
         lineCap: LineCap.ROUND,
       ));
 
-      final flown = _sliceRoute(coords, p);
+      final flown = widget.session.routeSliceAt(p);
       await _safeAddSource(
         map,
         GeoJsonSource(
@@ -289,7 +337,7 @@ class _RoadLiveMapLayerState extends State<RoadLiveMapLayer>
       circleStrokeColor: const Color(0xFF0A0B0D).toARGB32(),
     ));
 
-    final startPos = _posNow();
+    final startPos = _posAt(p);
     await _safeAddSource(
       map,
       GeoJsonSource(id: 'road-car', data: _pointGeoJson(startPos)),
@@ -330,12 +378,14 @@ class _RoadLiveMapLayerState extends State<RoadLiveMapLayer>
     }
 
     _routeZoom = _computeRouteZoom();
-    _displayBearing = _bearingNow();
+    _resetDisplayProgress();
+    _displayBearing = _bearingAt(_displayProgress);
     _markProgrammaticCamera(const Duration(milliseconds: 1600));
     await _fitRouteOverview();
     _percentNotifier.value = (_progressNow() * 100).round();
     setState(() => _ready = true);
     await Future.delayed(const Duration(milliseconds: 350));
+    await _syncCarGlowVisibility(true);
     await _resumeTracking();
     _startTracking();
   }
@@ -347,84 +397,89 @@ class _RoadLiveMapLayerState extends State<RoadLiveMapLayer>
 
   void _onTrackTick(Duration elapsed) {
     if (!_canTouchMap || !_ready) return;
-    final now = DateTime.now().millisecondsSinceEpoch;
-    if (now - _lastCarUpdateMs < 40) return;
-    _lastCarUpdateMs = now;
-
-    final p = _progressNow();
-    _lerpBearing(_bearingNow());
-    final pos = _posNow();
-    unawaited(_applyTrackFrame(p, pos, updateFlown: now - _lastFlownMs >= 100));
-    if (now - _lastFlownMs >= 100) _lastFlownMs = now;
-    _maybeUpdatePercent(p);
+    _advanceDisplayProgress(elapsed);
+    final p = _displayProgress;
+    _lerpBearing(_bearingAt(p));
+    _trackProgress = p;
+    final gen = ++_trackFrameGen;
+    final following = _isFollowing;
+    _applyTrackFrame(
+      gen,
+      p,
+      following: following,
+      updateFlown: _shouldUpdateFlownLine(following),
+    );
+    _maybeUpdatePercent(_progressNow());
   }
 
-  Future<void> _applyTrackFrame(
-    double p,
-    List<double> pos, {
+  void _applyTrackFrame(
+    int gen,
+    double p, {
+    required bool following,
     required bool updateFlown,
-  }) async {
-    if (!_canTouchMap) return;
-    final map = _map!;
+  }) {
+    if (!_canTouchMap || gen != _trackFrameGen) return;
+    final map = _map;
+    if (map == null) return;
+
+    final progress = p.clamp(0.0, 1.0);
+    final pos = _posAt(progress);
     final pt = Point(coordinates: Position(pos[0], pos[1]));
 
-    if (updateFlown) {
-      final coords = _routeCoords;
-      if (coords.length >= 2) {
-        final slice = _sliceRoute(coords, p.clamp(0.0, 1.0));
-        try {
-          await map.style.setStyleSourceProperty(
-            'road-route-flown',
-            'data',
-            _lineGeoJson(slice.isNotEmpty ? slice : [coords.first]),
-          );
-        } catch (_) {}
-      }
-    }
-
-    try {
-      await map.style.setStyleSourceProperty(
-        'road-car',
-        'data',
-        _pointGeoJson(pos),
-      );
-    } catch (_) {}
-
-    final halo = _haloAnn;
-    if (halo != null) {
-      try {
-        halo.geometry = pt;
-        halo.circleRadius = 18 + 8 * _pulseCtrl.value;
-        halo.circleOpacity = 0.20 - 0.12 * _pulseCtrl.value;
-        await _haloMgr?.update(halo);
-      } catch (_) {}
-    }
-
-    final car = _carAnn;
-    if (car != null) {
-      try {
-        car.geometry = pt;
-        car.circleOpacity = _isFollowing ? 0 : 0.95;
-        await _carMgr?.update(car);
-      } catch (_) {}
-    }
-
-    if (_isFollowing) {
-      final now = DateTime.now().millisecondsSinceEpoch;
-      if (now - _lastCameraMs < _cameraMinIntervalMs) return;
-      _lastCameraMs = now;
-
-      final smooth = _smoothPosition(pos);
+    if (following) {
       final followZoom = _followZoomLevel();
-      _markProgrammaticCamera(const Duration(milliseconds: 120));
+      _markProgrammaticCamera(const Duration(milliseconds: 80));
       final camOpts = CameraOptions(
-        center: Point(coordinates: Position(smooth[0], smooth[1])),
+        center: pt,
         pitch: _activeFollowPitch(followZoom),
         bearing: _displayBearing,
+        padding: MbxEdgeInsets(
+          top: 0,
+          left: 0,
+          bottom: widget.controlsBottomInset * _followPaddingFactor,
+          right: 0,
+        ),
       );
       if (!_userAdjustingZoom) camOpts.zoom = followZoom;
       unawaited(map.setCamera(camOpts).catchError((_) {}));
+    } else {
+      if (_shouldUpdateCarGeo()) {
+        unawaited(
+          map.style
+              .setStyleSourceProperty('road-car', 'data', _pointGeoJson(pos))
+              .catchError((_) {}),
+        );
+      }
+      final halo = _haloAnn;
+      if (halo != null) {
+        halo.geometry = pt;
+        halo.circleRadius = 18 + 8 * _pulseCtrl.value;
+        halo.circleOpacity = 0.20 - 0.12 * _pulseCtrl.value;
+        unawaited(_safeCircleUpdate(halo));
+      }
+      final car = _carAnn;
+      if (car != null) {
+        car.geometry = pt;
+        car.circleOpacity = 0.95;
+        unawaited(_safeCarUpdate(car));
+      }
     }
+
+    if (updateFlown) {
+      unawaited(_updateFlownRoute(map, progress));
+    }
+  }
+
+  Future<void> _updateFlownRoute(MapboxMap map, double progress) async {
+    final slice = widget.session.routeSliceAt(progress);
+    if (slice.length < 2) return;
+    try {
+      await map.style.setStyleSourceProperty(
+        'road-route-flown',
+        'data',
+        _lineGeoJson(slice),
+      );
+    } catch (_) {}
   }
 
   double _routeLatLngSpan() {
@@ -517,8 +572,14 @@ class _RoadLiveMapLayerState extends State<RoadLiveMapLayer>
       await _disableMapboxTerrain();
     }
     if (_isFollowing) {
-      await _applyTrackFrame(_progressNow(), _posNow(), updateFlown: true);
+      _applyTrackFrame(
+        ++_trackFrameGen,
+        _displayProgress,
+        following: true,
+        updateFlown: true,
+      );
     }
+    unawaited(_syncCarGlowVisibility(_isFollowing));
   }
 
   Future<void> _reloadMapStyle() async {
@@ -607,6 +668,7 @@ class _RoadLiveMapLayerState extends State<RoadLiveMapLayer>
       car.circleOpacity = 0.95;
       unawaited(_carMgr?.update(car));
     }
+    unawaited(_syncCarGlowVisibility(false));
   }
 
   void _onUserMapGesture() {
@@ -662,29 +724,40 @@ class _RoadLiveMapLayerState extends State<RoadLiveMapLayer>
       _manualOverride = false;
       _followZoom = null;
     });
-    _resetSmoothCamera();
-    _displayBearing = _bearingNow();
+    _resetDisplayProgress();
+    _displayBearing = _bearingAt(_displayProgress);
+    unawaited(_syncCarGlowVisibility(true));
     final map = _map;
     if (map != null) {
       _markProgrammaticCamera(const Duration(milliseconds: 600));
-      final pos = _posNow();
+      final pos = _posAt(_displayProgress);
+      final z = _followZoomLevel();
       try {
         await map.flyTo(
           CameraOptions(
             center: Point(coordinates: Position(pos[0], pos[1])),
-            zoom: _followZoomLevel(),
-            pitch: _activeFollowPitch(),
+            zoom: z,
+            pitch: _activeFollowPitch(z),
             bearing: _displayBearing,
+            padding: MbxEdgeInsets(
+              top: 0,
+              left: 0,
+              bottom: widget.controlsBottomInset * _followPaddingFactor,
+              right: 0,
+            ),
           ),
           MapAnimationOptions(duration: 480),
         );
       } catch (_) {}
     }
-    await _applyTrackFrame(_progressNow(), _posNow(), updateFlown: true);
+    _applyTrackFrame(
+      ++_trackFrameGen,
+      _displayProgress,
+      following: true,
+      updateFlown: true,
+    );
     if (mounted) setState(() {});
   }
-
-  void _resetSmoothCamera() => _smoothCamInit = false;
 
   Future<void> _safeAddSource(MapboxMap map, Source source) async {
     try {
@@ -738,48 +811,13 @@ class _RoadLiveMapLayerState extends State<RoadLiveMapLayer>
     });
   }
 
-  static List<List<double>> _sliceRoute(List<List<double>> coords, double p) {
-    final n = coords.length;
-    if (n < 2) return coords;
-    if (p <= 0) return [coords.first];
-    if (p >= 1) return coords;
-
-    final cumDist = List<double>.filled(n, 0.0);
-    for (var i = 1; i < n; i++) {
-      final dLon = coords[i][0] - coords[i - 1][0];
-      final dLat = coords[i][1] - coords[i - 1][1];
-      cumDist[i] = cumDist[i - 1] + math.sqrt(dLon * dLon + dLat * dLat);
-    }
-    final total = cumDist[n - 1];
-    if (total == 0) return [coords.first];
-
-    final target = p * total;
-    var lo = 0;
-    var hi = n - 1;
-    while (lo < hi - 1) {
-      final mid = (lo + hi) >> 1;
-      if (cumDist[mid] <= target) {
-        lo = mid;
-      } else {
-        hi = mid;
-      }
-    }
-    final segLen = cumDist[hi] - cumDist[lo];
-    final t = segLen == 0 ? 0.0 : (target - cumDist[lo]) / segLen;
-    return [
-      ...coords.sublist(0, hi),
-      [
-        coords[lo][0] + (coords[hi][0] - coords[lo][0]) * t,
-        coords[lo][1] + (coords[hi][1] - coords[lo][1]) * t,
-      ],
-    ];
-  }
-
   @override
   Widget build(BuildContext context) {
     final isFollowing = _isFollowing;
 
     return DeferredMapHost(
+      immediate: true,
+      placeholderColor: const Color(0xFF0C0D10),
       onMountChanged: _onMapHostMountChanged,
       builder: (context) {
         return Stack(
@@ -803,7 +841,8 @@ class _RoadLiveMapLayerState extends State<RoadLiveMapLayer>
                   ),
                 if (_ready && isFollowing)
                   IgnorePointer(
-                    child: Center(
+                    child: Align(
+                      alignment: const Alignment(0, -0.06),
                       child: AnimatedBuilder(
                         animation: _pulseCtrl,
                         builder: (_, __) => LiveMapVehicleOverlay(

@@ -3,8 +3,7 @@ import 'package:get/get.dart';
 import '../../controllers/home_controller.dart';
 import '../../utils/app_theme.dart';
 import '../../widgets/navigation/app_bottom_nav.dart';
-import 'pages/profile_tab_page.dart';
-import 'pages/search_tab_page.dart';
+import 'home_tabs.dart';
 
 class HomeView extends StatelessWidget {
   const HomeView({super.key});
