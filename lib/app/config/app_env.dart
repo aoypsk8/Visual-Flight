@@ -1,7 +1,7 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-// Reads values from the .env file loaded at app start.
-// Usage anywhere in the app: AppEnv.baseUrl
+// Reads secrets / env from `.env` loaded at app start.
+// HTTP hosts & paths: see api_urls.dart ([ApiHosts], [AuthPaths], [MapboxApiPaths])
 class AppEnv {
   AppEnv._();
 

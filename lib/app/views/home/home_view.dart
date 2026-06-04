@@ -3,18 +3,19 @@ import 'package:get/get.dart';
 import '../../controllers/home_controller.dart';
 import '../../utils/app_theme.dart';
 import '../../widgets/navigation/app_bottom_nav.dart';
-import 'pages/explore_tab_page.dart';
 import 'pages/profile_tab_page.dart';
 import 'pages/search_tab_page.dart';
 
 class HomeView extends StatelessWidget {
   const HomeView({super.key});
 
+  /// Flight + Car share one search map (avoids duplicate Mapbox native views).
   static const _pages = <Widget>[
-    SearchTabPage(),
-    ExploreTabPage(),
-    ProfileTabPage(),
+    SearchTabPage(key: ValueKey('search-tab')),
+    ProfileTabPage(key: ValueKey('profile-tab')),
   ];
+
+  static int _pageIndexForTab(int tab) => tab >= 2 ? 1 : 0;
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +28,7 @@ class HomeView extends StatelessWidget {
           // Tab content — directional slide transition
           Obx(
             () => _SlideTabView(
-              currentIndex: ctrl.currentTab.value,
+              currentIndex: _pageIndexForTab(ctrl.currentTab.value),
               pages: _pages,
             ),
           ),

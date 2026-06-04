@@ -11,6 +11,8 @@ class SearchRouteCard extends StatelessWidget {
   final Airport? from;
   final Airport? to;
   final bool loadingFrom;
+  final bool loadingRoadRoute;
+  final bool isDriveMode;
   final bool fromIsCurrentLocation;
   final double? distanceKm;
   final Duration? flightDuration;
@@ -27,6 +29,8 @@ class SearchRouteCard extends StatelessWidget {
     required this.from,
     required this.to,
     required this.loadingFrom,
+    this.loadingRoadRoute = false,
+    this.isDriveMode = false,
     required this.step,
     this.fromIsCurrentLocation = false,
     this.distanceKm,
@@ -82,6 +86,7 @@ class SearchRouteCard extends StatelessWidget {
           ),
           _ConnectorRow(
             step: step,
+            loadingRoadRoute: loadingRoadRoute,
             swapEnabled: to != null && from != null,
             onSwap: onSwap,
           ),
@@ -97,12 +102,15 @@ class SearchRouteCard extends StatelessWidget {
             duration: const Duration(milliseconds: 240),
             curve: Curves.easeOutCubic,
             alignment: Alignment.topCenter,
-            child: _hasRoute
-                ? _RouteSummaryFooter(
-                    distanceKm: distanceKm!,
-                    flightDuration: flightDuration!,
-                  )
-                : const SizedBox(width: double.infinity, height: 0),
+            child: loadingRoadRoute && isDriveMode
+                ? const _RouteLoadingFooter()
+                : _hasRoute
+                    ? _RouteSummaryFooter(
+                        distanceKm: distanceKm!,
+                        flightDuration: flightDuration!,
+                        isDrive: isDriveMode,
+                      )
+                    : const SizedBox(width: double.infinity, height: 0),
           ),
         ],
       ),
@@ -193,21 +201,25 @@ class _CollapseChipButton extends StatelessWidget {
 class _ConnectorRow extends StatelessWidget {
   const _ConnectorRow({
     required this.step,
+    this.loadingRoadRoute = false,
     required this.swapEnabled,
     required this.onSwap,
   });
 
   final SearchRouteUxStep step;
+  final bool loadingRoadRoute;
   final bool swapEnabled;
   final VoidCallback onSwap;
 
   @override
   Widget build(BuildContext context) {
-    final hint = switch (step) {
-      SearchRouteUxStep.findingOrigin => 'Setting up departure',
-      SearchRouteUxStep.chooseDestination => 'Next: pick destination',
-      SearchRouteUxStep.routeReady => 'Direct · estimate',
-    };
+    final hint = loadingRoadRoute
+        ? 'Finding road route…'
+        : switch (step) {
+            SearchRouteUxStep.findingOrigin => 'Setting up departure',
+            SearchRouteUxStep.chooseDestination => 'Next: pick destination',
+            SearchRouteUxStep.routeReady => 'Direct · estimate',
+          };
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 4, 18, 4),
@@ -300,14 +312,56 @@ class _SwapButton extends StatelessWidget {
   }
 }
 
+class _RouteLoadingFooter extends StatelessWidget {
+  const _RouteLoadingFooter();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: Colors.white.withValues(alpha: 0.07)),
+        ),
+        color: Colors.white.withValues(alpha: 0.02),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.2,
+              color: AppColors.amber.withValues(alpha: 0.9),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: AppText(
+              'Calculating drive distance & time…',
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Colors.white.withValues(alpha: 0.72),
+              poppins: true,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _RouteSummaryFooter extends StatelessWidget {
   const _RouteSummaryFooter({
     required this.distanceKm,
     required this.flightDuration,
+    this.isDrive = false,
   });
 
   final double distanceKm;
   final Duration flightDuration;
+  final bool isDrive;
 
   @override
   Widget build(BuildContext context) {
@@ -336,7 +390,7 @@ class _RouteSummaryFooter extends StatelessWidget {
           Expanded(
             child: _FooterStat(
               value: duration,
-              label: 'Est. flight',
+              label: isDrive ? 'Est. drive' : 'Est. flight',
               alignEnd: true,
             ),
           ),

@@ -15,10 +15,11 @@ final class AppAssets {
 final class AppUiAssets {
   AppUiAssets._();
 
-  static const String liveWindow = '${AppAssets.ui}/live.jpg';
-  static const String liveTail = '${AppAssets.ui}/live.jpg';
   static const String finishedFlight = '${AppAssets.ui}/finishedFlight.jpg';
 }
+
+/// 3D aircraft model for live Mapbox layer.
+const kLiveAirplaneModelAsset = 'assets/models/airplane.glb';
 
 /// Seat selection screen — airplane background (PNG in [AppAssets.images]).
 const kSeatAirplaneBgAsset = '${AppAssets.images}/seat_airplane_bg.png';

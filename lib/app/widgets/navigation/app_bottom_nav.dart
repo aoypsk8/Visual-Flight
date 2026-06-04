@@ -35,14 +35,14 @@ class AppBottomNav extends StatelessWidget {
 
   static const List<AppBottomNavItem> kAppBottomNavItems = [
     AppBottomNavItem(
-      icon: Icons.travel_explore_outlined,
-      activeIcon: Icons.travel_explore_rounded,
-      label: 'Search',
+      icon: Icons.flight_outlined,
+      activeIcon: Icons.flight_rounded,
+      label: 'Flight',
     ),
     AppBottomNavItem(
-      icon: Icons.near_me_outlined,
-      activeIcon: Icons.near_me_rounded,
-      label: 'Explore',
+      icon: Icons.directions_car_outlined,
+      activeIcon: Icons.directions_car_rounded,
+      label: 'Car',
     ),
     AppBottomNavItem(
       icon: Icons.person_outline_rounded,

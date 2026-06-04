@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
@@ -7,17 +8,15 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
 import '../../models/live_flight_session.dart';
+import '../../services/flight_audio_service.dart';
 import '../../services/live_flight_session_store.dart';
 import '../../utils/app_colors.dart';
-import '../../utils/app_resources.dart';
 import '../../utils/live_flight_progress.dart';
 import '../../widgets/common/app_text.dart';
 import 'landing_view.dart';
 import 'live_flight_map_layer.dart';
 
-enum LiveFlightLayer { map, window, tail }
-
-/// In-flight focus session — real-time progress + Map / Window / Tail views.
+/// In-flight focus session — real-time progress + map view.
 class LiveFlightView extends StatefulWidget {
   const LiveFlightView({super.key, required this.session});
 
@@ -30,48 +29,66 @@ class LiveFlightView extends StatefulWidget {
 class _LiveFlightViewState extends State<LiveFlightView>
     with TickerProviderStateMixin {
   late LiveFlightSession _session;
-  late final AnimationController _fadeCtrl;
   late final AnimationController _endAnimCtrl;
   Ticker? _liveTicker;
-  LiveFlightLayer _layer = LiveFlightLayer.map;
   double _progress = 0;
   bool _isEnding = false;
+  bool _uiHidden = false;
+  final FlightAudioService _flightAudio = FlightAudioService();
+
+  void _toggleUiHidden() {
+    HapticFeedback.selectionClick();
+    setState(() => _uiHidden = !_uiHidden);
+  }
 
   @override
   void initState() {
     super.initState();
     _session = widget.session;
     LiveFlightSessionStore.save(_session);
-    _fadeCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    )..value = 1;
     _endAnimCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 520),
     );
     _tickProgress();
     _liveTicker = createTicker((_) => _tickProgress())..start();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_flightAudio.startFlight());
+    });
   }
 
   @override
   void dispose() {
+    _flightAudio.dispose();
     _liveTicker?.dispose();
-    _fadeCtrl.dispose();
     _endAnimCtrl.dispose();
     super.dispose();
   }
+
+  bool _completionScheduled = false;
+  bool _navigatedAway = false;
 
   void _tickProgress() {
     if (!mounted || _isEnding) return;
     final p = _session.progressAt(DateTime.now());
     if (p >= 1.0) {
-      _onComplete();
+      _scheduleCompletion();
       return;
     }
     if (p != _progress) {
       setState(() => _progress = p);
     }
+  }
+
+  void _scheduleCompletion() {
+    if (_completionScheduled || _navigatedAway || !mounted) return;
+    _completionScheduled = true;
+    _liveTicker?.stop();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_onComplete());
+    });
   }
 
   Future<void> _onHoldStopComplete() async {
@@ -81,22 +98,18 @@ class _LiveFlightViewState extends State<LiveFlightView>
     HapticFeedback.heavyImpact();
     await _endAnimCtrl.forward(from: 0);
     if (!mounted) return;
-    _onComplete();
+    await _onComplete();
   }
 
-  void _onComplete() {
+  Future<void> _onComplete() async {
+    if (_navigatedAway || !mounted) return;
+    _navigatedAway = true;
     _liveTicker?.stop();
     LiveFlightSessionStore.clear();
     if (!_isEnding) HapticFeedback.heavyImpact();
+    await _flightAudio.playLanding();
+    if (!mounted) return;
     Get.off(() => LandingView(session: _session));
-  }
-
-  Future<void> _switchLayer(LiveFlightLayer next) async {
-    if (next == _layer) return;
-    HapticFeedback.selectionClick();
-    await _fadeCtrl.animateTo(0, duration: const Duration(milliseconds: 280));
-    setState(() => _layer = next);
-    await _fadeCtrl.forward();
   }
 
   @override
@@ -118,28 +131,92 @@ class _LiveFlightViewState extends State<LiveFlightView>
             ),
             child: _LiveFlightLayers(
               session: _session,
-              layer: _layer,
               progress: _progress,
-              fade: _fadeCtrl,
+              uiHidden: _uiHidden,
             ),
           ),
-          _LegibilityScrim(strong: _layer != LiveFlightLayer.map),
-          SafeArea(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _LiveFlightTopBar(session: _session),
-                const Spacer(),
-                _LiveFlightHud(
-                  session: _session,
-                  derived: derived,
-                  progress: _progress,
-                  layer: _layer,
-                  onLayer: _switchLayer,
-                  holdEnabled: !_isEnding,
-                  onHoldComplete: _onHoldStopComplete,
+          AnimatedOpacity(
+            opacity: _uiHidden ? 0 : 1,
+            duration: const Duration(milliseconds: 280),
+            curve: Curves.easeOut,
+            child: IgnorePointer(
+              ignoring: _uiHidden,
+              child: const _LegibilityScrim(strong: true),
+            ),
+          ),
+          AnimatedOpacity(
+            opacity: _uiHidden ? 0 : 1,
+            duration: const Duration(milliseconds: 280),
+            curve: Curves.easeOut,
+            child: IgnorePointer(
+              ignoring: _uiHidden,
+              child: SafeArea(
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _LiveFlightTopBar(session: _session),
+                        const Spacer(),
+                        _LiveFlightHud(
+                          session: _session,
+                          derived: derived,
+                          progress: _progress,
+                          holdEnabled: !_isEnding,
+                          onHoldComplete: _onHoldStopComplete,
+                        ),
+                      ],
+                    ),
+                    // ปุ่ม hold — มุมขวาเหนือ HUD (ไม่ถูก Column stretch ดึงกลางจอ)
+                    Positioned(
+                      right: 16,
+                      bottom: 228,
+                      child: _HoldToEndFlightButton(
+                        enabled: !_isEnding,
+                        onHoldComplete: _onHoldStopComplete,
+                        compact: true,
+                        alignEnd: true,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Align(
+              alignment: Alignment.topRight,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 8, right: 16),
+                child: _ImmersiveUiToggle(
+                  hidden: _uiHidden,
+                  onPressed: _toggleUiHidden,
+                ),
+              ),
+            ),
+          ),
+          AnimatedOpacity(
+            opacity: _uiHidden ? 1 : 0,
+            duration: const Duration(milliseconds: 280),
+            curve: Curves.easeOut,
+            child: IgnorePointer(
+              ignoring: !_uiHidden,
+              child: SafeArea(
+                child: Stack(
+                  children: [
+                    // แถบสถิติเล็กลอยบนแผนที่ — ไม่บังทั้งจอ
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 12,
+                      child: Center(
+                        child: _CompactFlightStatsPill(derived: derived),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
           if (_isEnding) _EndingFlightOverlay(animation: _endAnimCtrl),
@@ -152,62 +229,35 @@ class _LiveFlightViewState extends State<LiveFlightView>
 class _LiveFlightLayers extends StatelessWidget {
   const _LiveFlightLayers({
     required this.session,
-    required this.layer,
     required this.progress,
-    required this.fade,
+    this.uiHidden = false,
   });
 
   final LiveFlightSession session;
-  final LiveFlightLayer layer;
   final double progress;
-  final Animation<double> fade;
+  final bool uiHidden;
 
   @override
   Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: fade,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          _layerView(LiveFlightLayer.map),
-          _layerView(LiveFlightLayer.window),
-          _layerView(LiveFlightLayer.tail),
-        ],
-      ),
-    );
-  }
-
-  Widget _layerView(LiveFlightLayer mode) {
-    final visible = layer == mode;
-    return IgnorePointer(
-      ignoring: !visible,
-      child: AnimatedOpacity(
-        opacity: visible ? 1 : 0,
-        duration: const Duration(milliseconds: 600),
-        curve: Curves.easeInOut,
-        child: switch (mode) {
-          LiveFlightLayer.map => session.hasMapCoords
-              ? LiveFlightMapLayer(
-                  fromCode: session.fromCode,
-                  toCode: session.toCode,
-                  fromLat: session.fromLat!,
-                  fromLng: session.fromLng!,
-                  toLat: session.toLat!,
-                  toLng: session.toLng!,
-                  startedAt: session.startedAt,
-                  totalSeconds: session.totalSeconds,
-                  progress: progress,
-                  followCamera: visible,
-                )
-              : _SchematicRouteView(
-                  fromCode: session.fromCode,
-                  toCode: session.toCode,
-                  progress: progress,
-                ),
-          LiveFlightLayer.window => _WindowLayerView(progress: progress),
-          LiveFlightLayer.tail => const _TailLayerView(),
-        },
-      ),
+    if (!session.hasMapCoords) {
+      return _SchematicRouteView(
+        fromCode: session.fromCode,
+        toCode: session.toCode,
+        progress: progress,
+      );
+    }
+    return LiveFlightMapLayer(
+      fromCode: session.fromCode,
+      toCode: session.toCode,
+      fromLat: session.fromLat!,
+      fromLng: session.fromLng!,
+      toLat: session.toLat!,
+      toLng: session.toLng!,
+      startedAt: session.startedAt,
+      totalSeconds: session.totalSeconds,
+      progress: progress,
+      followCamera: true,
+      uiHidden: uiHidden,
     );
   }
 }
@@ -424,85 +474,6 @@ class _PlaneMarkerPulseState extends State<_PlaneMarkerPulse>
   }
 }
 
-class _WindowLayerView extends StatelessWidget {
-  const _WindowLayerView({required this.progress});
-
-  final double progress;
-
-  @override
-  Widget build(BuildContext context) {
-    final parallax = (0.5 - progress) * 0.07;
-
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        Transform.scale(
-          scale: 1.18,
-          child: Transform.translate(
-            offset: Offset(0, parallax * MediaQuery.sizeOf(context).height),
-            child: Image.asset(
-              AppUiAssets.liveWindow,
-              fit: BoxFit.cover,
-              alignment: Alignment.center,
-              errorBuilder: (_, _, _) => const ColoredBox(color: Color(0xFF1A2030)),
-            ),
-          ),
-        ),
-        Center(
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 28, vertical: 72),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.22),
-                width: 10,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.5),
-                  blurRadius: 40,
-                  spreadRadius: -8,
-                ),
-              ],
-            ),
-          ),
-        ),
-        Positioned(
-          top: 80,
-          left: 48,
-          child: Container(
-            width: 80,
-            height: 120,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(40),
-              gradient: LinearGradient(
-                colors: [
-                  Colors.white.withValues(alpha: 0.12),
-                  Colors.transparent,
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _TailLayerView extends StatelessWidget {
-  const _TailLayerView();
-
-  @override
-  Widget build(BuildContext context) {
-    return Image.asset(
-      AppUiAssets.liveTail,
-      fit: BoxFit.cover,
-      alignment: Alignment.center,
-      errorBuilder: (_, _, _) => const ColoredBox(color: Color(0xFF12151C)),
-    );
-  }
-}
-
 class _LiveFlightTopBar extends StatelessWidget {
   const _LiveFlightTopBar({required this.session});
 
@@ -511,7 +482,7 @@ class _LiveFlightTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 8, 56, 0),
       child: Row(
         children: [
           _LiveBadge(),
@@ -522,6 +493,151 @@ class _LiveFlightTopBar extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// ปุ่มซ่อน/แสดง UI ทั้งหมด — โหมด immersive
+class _ImmersiveUiToggle extends StatelessWidget {
+  const _ImmersiveUiToggle({
+    required this.hidden,
+    required this.onPressed,
+  });
+
+  final bool hidden;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(14),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: hidden ? 0.35 : 0.55),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: hidden
+                  ? Colors.white.withValues(alpha: 0.25)
+                  : Colors.white.withValues(alpha: 0.14),
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                hidden ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                size: 18,
+                color: hidden ? AppColors.amber : Colors.white70,
+              ),
+              const SizedBox(width: 6),
+              AppText(
+                hidden ? 'Show UI' : 'Clean view',
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: hidden ? AppColors.amber : Colors.white70,
+                poppins: true,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CompactFlightStatsPill extends StatelessWidget {
+  const _CompactFlightStatsPill({required this.derived});
+
+  final LiveFlightProgress derived;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(999),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFF16181D).withValues(alpha: 0.78),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _CompactStat(
+                label: 'LEFT',
+                value: derived.remainingLabel,
+                mono: true,
+              ),
+              _pillDivider(),
+              _CompactStat(
+                label: 'KM',
+                value: '${derived.distanceLeftKm}',
+              ),
+              _pillDivider(),
+              _CompactStat(
+                label: 'TIME',
+                value: derived.elapsedLabel,
+                mono: true,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _pillDivider() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Container(
+        width: 1,
+        height: 22,
+        color: Colors.white.withValues(alpha: 0.12),
+      ),
+    );
+  }
+}
+
+class _CompactStat extends StatelessWidget {
+  const _CompactStat({
+    required this.label,
+    required this.value,
+    this.mono = false,
+  });
+
+  final String label;
+  final String value;
+  final bool mono;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AppText(
+          label,
+          fontSize: 8,
+          fontWeight: FontWeight.w600,
+          color: Colors.white.withValues(alpha: 0.4),
+          letterSpacing: 1,
+          poppins: true,
+        ),
+        const SizedBox(height: 2),
+        AppText(
+          value,
+          fontSize: 15,
+          fontWeight: FontWeight.w700,
+          color: Colors.white,
+          poppins: !mono,
+        ),
+      ],
     );
   }
 }
@@ -660,8 +776,6 @@ class _LiveFlightHud extends StatelessWidget {
     required this.session,
     required this.derived,
     required this.progress,
-    required this.layer,
-    required this.onLayer,
     required this.onHoldComplete,
     this.holdEnabled = true,
   });
@@ -669,8 +783,6 @@ class _LiveFlightHud extends StatelessWidget {
   final LiveFlightSession session;
   final LiveFlightProgress derived;
   final double progress;
-  final LiveFlightLayer layer;
-  final ValueChanged<LiveFlightLayer> onLayer;
   final VoidCallback onHoldComplete;
   final bool holdEnabled;
 
@@ -692,17 +804,7 @@ class _LiveFlightHud extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _HoldToEndFlightButton(
-                  enabled: holdEnabled,
-                  onHoldComplete: onHoldComplete,
-                  compact: true,
-                ),
                 const SizedBox(height: 12),
-                _ViewSegmentedControl(
-                  selected: layer,
-                  onChanged: onLayer,
-                ),
-                const SizedBox(height: 14),
                 Row(
                   children: [
                     Expanded(
@@ -726,8 +828,7 @@ class _LiveFlightHud extends StatelessWidget {
                     ),
                   ],
                 ),
-                if (layer == LiveFlightLayer.map &&
-                    derived.altitudeFlavor != null) ...[
+                if (derived.altitudeFlavor != null) ...[
                   const SizedBox(height: 10),
                   Align(
                     alignment: Alignment.centerLeft,
@@ -792,65 +893,6 @@ class _HudMetric extends StatelessWidget {
           poppins: !mono,
         ),
       ],
-    );
-  }
-}
-
-class _ViewSegmentedControl extends StatelessWidget {
-  const _ViewSegmentedControl({
-    required this.selected,
-    required this.onChanged,
-  });
-
-  final LiveFlightLayer selected;
-  final ValueChanged<LiveFlightLayer> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.35),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          _seg('Map', LiveFlightLayer.map),
-          _seg('Window', LiveFlightLayer.window),
-          _seg('Tail', LiveFlightLayer.tail),
-        ],
-      ),
-    );
-  }
-
-  Widget _seg(String label, LiveFlightLayer mode) {
-    final on = selected == mode;
-    return Expanded(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => onChanged(mode),
-          borderRadius: BorderRadius.circular(10),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            decoration: BoxDecoration(
-              color: on ? AppColors.amber.withValues(alpha: 0.18) : null,
-              borderRadius: BorderRadius.circular(10),
-              border: on
-                  ? Border.all(color: AppColors.amber.withValues(alpha: 0.45))
-                  : null,
-            ),
-            alignment: Alignment.center,
-            child: AppText(
-              label,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: on ? AppColors.amber : Colors.white.withValues(alpha: 0.45),
-              poppins: true,
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -964,11 +1006,14 @@ class _HoldToEndFlightButton extends StatefulWidget {
     required this.onHoldComplete,
     this.enabled = true,
     this.compact = false,
+    this.alignEnd = false,
   });
 
   final VoidCallback onHoldComplete;
   final bool enabled;
   final bool compact;
+  /// จัดชิดขวาเมื่อวางใน Positioned มุมขวาจอ
+  final bool alignEnd;
 
   @override
   State<_HoldToEndFlightButton> createState() => _HoldToEndFlightButtonState();
@@ -1033,9 +1078,10 @@ class _HoldToEndFlightButtonState extends State<_HoldToEndFlightButton>
       padding: EdgeInsets.only(bottom: widget.compact ? 0 : 8),
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment:
+            widget.alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.center,
         children: [
-          Center(
-            child: Listener(
+          Listener(
               onPointerDown: widget.enabled ? _pointerDown : null,
               onPointerUp: widget.enabled ? _pointerUp : null,
               onPointerCancel: widget.enabled ? _pointerCancel : null,
@@ -1116,7 +1162,6 @@ class _HoldToEndFlightButtonState extends State<_HoldToEndFlightButton>
                 },
               ),
             ),
-          ),
           SizedBox(height: widget.compact ? 6 : 8),
           AppText(
             _holding ? 'Release to cancel' : 'Hold 3 s to end flight',
@@ -1126,6 +1171,7 @@ class _HoldToEndFlightButtonState extends State<_HoldToEndFlightButton>
                 ? AppColors.amber.withValues(alpha: 0.9)
                 : Colors.white.withValues(alpha: 0.5),
             poppins: true,
+            textAlign: widget.alignEnd ? TextAlign.right : TextAlign.center,
           ),
         ],
       ),

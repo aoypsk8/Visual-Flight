@@ -6,33 +6,31 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import '../../utils/share_utils.dart';
 
-import '../../models/live_flight_session.dart';
+import '../../models/road_trip_session.dart';
 import '../../routes/app_routes.dart';
 import '../../utils/app_colors.dart';
-import '../../utils/app_locale_utils.dart';
-import '../../utils/app_resources.dart';
 import '../../utils/flight_route_utils.dart';
 import '../../utils/live_flight_progress.dart';
 import '../../widgets/common/app_text.dart';
 
-/// Shown when live flight progress reaches 100%.
-class LandingView extends StatefulWidget {
-  const LandingView({super.key, required this.session});
+/// Shown when road trip progress reaches 100 %.
+class RoadArrivalView extends StatefulWidget {
+  const RoadArrivalView({super.key, required this.session});
 
-  final LiveFlightSession session;
+  final RoadTripSession session;
 
   @override
-  State<LandingView> createState() => _LandingViewState();
+  State<RoadArrivalView> createState() => _RoadArrivalViewState();
 }
 
-class _LandingViewState extends State<LandingView>
+class _RoadArrivalViewState extends State<RoadArrivalView>
     with TickerProviderStateMixin {
   late final AnimationController _sparkleCtrl;
   late final AnimationController _badgeCtrl;
   late final AnimationController _cardCtrl;
   late final AnimationController _btnCtrl;
 
-  LiveFlightSession get _s => widget.session;
+  RoadTripSession get _s => widget.session;
 
   @override
   void initState() {
@@ -87,11 +85,10 @@ class _LandingViewState extends State<LandingView>
 
   @override
   Widget build(BuildContext context) {
-    final isLao = isLaoLocale(context);
     final date = _s.startedAt;
     final dateStr =
         '${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}';
-    final focusTime =
+    final driveTime =
         LiveFlightProgress.formatMinutes(_s.totalSeconds / 60.0);
     final distance = FlightRouteUtils.formatDistance(_s.totalKm);
 
@@ -100,39 +97,47 @@ class _LandingViewState extends State<LandingView>
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // ── Background photo ──────────────────────────────────────────────
-          Image.asset(
-            AppUiAssets.finishedFlight,
-            fit: BoxFit.cover,
-            alignment: const Alignment(0, -0.15),
-            errorBuilder: (_, _, _) =>
-                const ColoredBox(color: AppColors.surf1),
-          ),
-          // ── Dark scrim ────────────────────────────────────────────────────
-          const DecoratedBox(
+          // ── Road-themed gradient background ──────────────────────────────
+          DecoratedBox(
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                stops: [0.0, 0.38, 1.0],
+              gradient: RadialGradient(
+                center: const Alignment(0, -0.4),
+                radius: 1.4,
                 colors: [
-                  Color(0x88000000),
-                  Color(0x33000000),
-                  Color(0xF50C0D10),
+                  const Color(0xFF1A2535),
+                  AppColors.surf1,
                 ],
               ),
             ),
           ),
-          // ── Amber radial glow (top-right) ─────────────────────────────────
+          // ── Amber top glow ────────────────────────────────────────────────
           DecoratedBox(
             decoration: BoxDecoration(
               gradient: RadialGradient(
-                center: const Alignment(0.45, -0.62),
-                radius: 0.88,
+                center: const Alignment(0.3, -0.7),
+                radius: 0.85,
                 colors: [
-                  AppColors.amber.withValues(alpha: 0.17),
+                  AppColors.amber.withValues(alpha: 0.15),
                   Colors.transparent,
                 ],
+              ),
+            ),
+          ),
+          // ── Road lines (decorative) ───────────────────────────────────────
+          const IgnorePointer(child: _RoadDecorPainterWidget()),
+          // ── Bottom dark scrim ─────────────────────────────────────────────
+          const Align(
+            alignment: Alignment.bottomCenter,
+            child: SizedBox(
+              height: 300,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.transparent, Color(0xF00C0D10)],
+                  ),
+                ),
               ),
             ),
           ),
@@ -157,7 +162,6 @@ class _LandingViewState extends State<LandingView>
                           scale: 0.55 + 0.45 * t,
                           child: _HeroBadgeSection(
                             sparkleAngle: _sparkleCtrl.value * math.pi * 2,
-                            isLao: isLao,
                           ),
                         ),
                       );
@@ -175,16 +179,15 @@ class _LandingViewState extends State<LandingView>
 
                   const SizedBox(height: 16),
 
-                  // Boarding-pass card
+                  // Road trip summary card
                   _stagger(
                     _cardCtrl,
                     0.08,
-                    _BoardingPassCard(
+                    _RoadTripSummaryCard(
                       session: _s,
                       distance: distance,
-                      focusTime: focusTime,
+                      driveTime: driveTime,
                       dateStr: dateStr,
-                      isLao: isLao,
                     ),
                   ),
 
@@ -197,9 +200,8 @@ class _LandingViewState extends State<LandingView>
                     _ShareButton(
                       session: _s,
                       distance: distance,
-                      focusTime: focusTime,
+                      driveTime: driveTime,
                       dateStr: dateStr,
-                      isLao: isLao,
                     ),
                   ),
 
@@ -209,7 +211,7 @@ class _LandingViewState extends State<LandingView>
                   _stagger(
                     _btnCtrl,
                     0.12,
-                    _HomeButton(isLao: isLao),
+                    _HomeButton(),
                   ),
                 ],
               ),
@@ -222,17 +224,68 @@ class _LandingViewState extends State<LandingView>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Hero badge + sparkle ring
+// Road decorative painter (perspective road lines)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _RoadDecorPainterWidget extends StatelessWidget {
+  const _RoadDecorPainterWidget();
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(painter: _RoadDecorPainter());
+  }
+}
+
+class _RoadDecorPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final vp = Offset(cx, size.height * 0.35); // vanishing point
+
+    // Draw perspective road
+    final roadPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.03)
+      ..style = PaintingStyle.fill;
+
+    final roadPath = Path()
+      ..moveTo(cx - 20, vp.dy)
+      ..lineTo(cx + 20, vp.dy)
+      ..lineTo(cx + size.width * 0.45, size.height)
+      ..lineTo(cx - size.width * 0.45, size.height)
+      ..close();
+    canvas.drawPath(roadPath, roadPaint);
+
+    // Center dashes (perspective)
+    final dashPaint = Paint()
+      ..color = AppColors.amber.withValues(alpha: 0.04)
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+
+    const dashCount = 8;
+    for (var i = 0; i < dashCount; i++) {
+      final t1 = (i + 0.15) / dashCount;
+      final t2 = (i + 0.55) / dashCount;
+      final y1 = vp.dy + (size.height - vp.dy) * t1;
+      final y2 = vp.dy + (size.height - vp.dy) * t2;
+      final x1 = cx + (cx * 0.0) * t1; // stays at center
+      final x2 = cx + (cx * 0.0) * t2;
+      canvas.drawLine(Offset(x1, y1), Offset(x2, y2), dashPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _RoadDecorPainter old) => false;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hero badge with sparkles
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _HeroBadgeSection extends StatelessWidget {
-  const _HeroBadgeSection({
-    required this.sparkleAngle,
-    required this.isLao,
-  });
+  const _HeroBadgeSection({required this.sparkleAngle});
 
   final double sparkleAngle;
-  final bool isLao;
 
   @override
   Widget build(BuildContext context) {
@@ -245,12 +298,10 @@ class _HeroBadgeSection extends StatelessWidget {
           child: Stack(
             alignment: Alignment.center,
             children: [
-              // Sparkle ring
               CustomPaint(
                 size: const Size(148, 148),
                 painter: _SparklePainter(angle: sparkleAngle),
               ),
-              // Outer amber pulse halo
               Container(
                 width: 96,
                 height: 96,
@@ -265,7 +316,6 @@ class _HeroBadgeSection extends StatelessWidget {
                   ],
                 ),
               ),
-              // Badge circle
               Container(
                 width: 76,
                 height: 76,
@@ -285,7 +335,7 @@ class _HeroBadgeSection extends StatelessWidget {
                   ],
                 ),
                 child: const Icon(
-                  Icons.flight_land_rounded,
+                  Icons.directions_car_rounded,
                   color: Color(0xFF0A0B0D),
                   size: 36,
                 ),
@@ -295,7 +345,7 @@ class _HeroBadgeSection extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         AppText(
-          'LANDED',
+          'ARRIVED',
           fontSize: 11,
           fontWeight: FontWeight.w800,
           color: AppColors.amber,
@@ -305,12 +355,12 @@ class _HeroBadgeSection extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         AppText(
-          isLao ? 'ລົງຈອດແລ້ວ' : 'Touchdown complete',
+          'Road trip complete',
           fontSize: 13,
           fontWeight: FontWeight.w500,
           color: AppColors.tx2,
           textAlign: TextAlign.center,
-          poppins: !isLao,
+          poppins: true,
         ),
       ],
     );
@@ -326,53 +376,40 @@ class _SparklePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2;
     final cy = size.height / 2;
-
-    // Two rings: outer (6 sparkles, clockwise) + inner (5 sparkles, counter)
     const outerCount = 6;
     const innerCount = 5;
     final outerR = size.width * 0.45;
     final innerR = size.width * 0.35;
 
-    void drawSparkle(
-        double x, double y, double sz, double alpha, double rotation) {
-      final paint = Paint()
-        ..color = AppColors.amber.withValues(alpha: alpha);
+    void drawSparkle(double x, double y, double sz, double alpha, double rot) {
       canvas.save();
       canvas.translate(x, y);
-      canvas.rotate(rotation);
-      final path = Path()
-        ..moveTo(0, -sz)
-        ..lineTo(sz * 0.28, -sz * 0.28)
-        ..lineTo(sz, 0)
-        ..lineTo(sz * 0.28, sz * 0.28)
-        ..lineTo(0, sz)
-        ..lineTo(-sz * 0.28, sz * 0.28)
-        ..lineTo(-sz, 0)
-        ..lineTo(-sz * 0.28, -sz * 0.28)
-        ..close();
-      canvas.drawPath(path, paint);
+      canvas.rotate(rot);
+      canvas.drawPath(
+        Path()
+          ..moveTo(0, -sz)
+          ..lineTo(sz * 0.28, -sz * 0.28)
+          ..lineTo(sz, 0)
+          ..lineTo(sz * 0.28, sz * 0.28)
+          ..lineTo(0, sz)
+          ..lineTo(-sz * 0.28, sz * 0.28)
+          ..lineTo(-sz, 0)
+          ..lineTo(-sz * 0.28, -sz * 0.28)
+          ..close(),
+        Paint()..color = AppColors.amber.withValues(alpha: alpha),
+      );
       canvas.restore();
     }
 
     for (var i = 0; i < outerCount; i++) {
       final a = angle + i / outerCount * math.pi * 2;
-      drawSparkle(
-        cx + outerR * math.cos(a),
-        cy + outerR * math.sin(a),
-        4.8,
-        0.82,
-        a + math.pi / 4,
-      );
+      drawSparkle(cx + outerR * math.cos(a), cy + outerR * math.sin(a),
+          4.8, 0.82, a + math.pi / 4);
     }
     for (var i = 0; i < innerCount; i++) {
       final a = -angle * 0.65 + i / innerCount * math.pi * 2;
-      drawSparkle(
-        cx + innerR * math.cos(a),
-        cy + innerR * math.sin(a),
-        3.0,
-        0.50,
-        a,
-      );
+      drawSparkle(cx + innerR * math.cos(a), cy + innerR * math.sin(a),
+          3.0, 0.50, a);
     }
   }
 
@@ -381,7 +418,7 @@ class _SparklePainter extends CustomPainter {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Destination city
+// Destination city title
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _DestinationTitle extends StatelessWidget {
@@ -410,23 +447,21 @@ class _DestinationTitle extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Boarding-pass card
+// Road trip summary card
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _BoardingPassCard extends StatelessWidget {
-  const _BoardingPassCard({
+class _RoadTripSummaryCard extends StatelessWidget {
+  const _RoadTripSummaryCard({
     required this.session,
     required this.distance,
-    required this.focusTime,
+    required this.driveTime,
     required this.dateStr,
-    required this.isLao,
   });
 
-  final LiveFlightSession session;
+  final RoadTripSession session;
   final String distance;
-  final String focusTime;
+  final String driveTime;
   final String dateStr;
-  final bool isLao;
 
   @override
   Widget build(BuildContext context) {
@@ -443,7 +478,7 @@ class _BoardingPassCard extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // ── Header row ──────────────────────────────────────────────
+              // Header
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
                 child: Row(
@@ -459,7 +494,7 @@ class _BoardingPassCard extends StatelessWidget {
                         ),
                       ),
                       child: AppText(
-                        'BOARDING PASS',
+                        'ROAD TRIP',
                         fontSize: 8,
                         fontWeight: FontWeight.w800,
                         color: AppColors.amber,
@@ -479,31 +514,30 @@ class _BoardingPassCard extends StatelessWidget {
                 ),
               ),
 
-              // ── Hairline ─────────────────────────────────────────────────
               Container(height: 1, color: AppColors.hair),
 
-              // ── Route section ─────────────────────────────────────────────
+              // Route
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Origin
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           AppText(
-                            session.fromCode,
-                            fontSize: 30,
+                            session.fromCity,
+                            fontSize: 18,
                             fontWeight: FontWeight.w800,
                             color: AppColors.tx1,
                             poppins: true,
-                            height: 1.0,
+                            height: 1.1,
+                            maxLines: 1,
                           ),
-                          const SizedBox(height: 3),
+                          const SizedBox(height: 2),
                           AppText(
-                            session.fromCity,
+                            session.fromCountry,
                             fontSize: 11,
                             fontWeight: FontWeight.w500,
                             color: AppColors.tx3,
@@ -513,46 +547,43 @@ class _BoardingPassCard extends StatelessWidget {
                         ],
                       ),
                     ),
-
-                    // Route arrow
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
                       child: Column(
-                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            Icons.flight_rounded,
-                            size: 20,
+                            Icons.directions_car_rounded,
+                            size: 18,
                             color: AppColors.amber.withValues(alpha: 0.9),
                           ),
-                          const SizedBox(height: 5),
+                          const SizedBox(height: 4),
                           SizedBox(
-                            width: 48,
+                            width: 40,
                             child: CustomPaint(
-                              size: const Size(48, 2),
+                              size: const Size(40, 2),
                               painter: _GradientLinePainter(),
                             ),
                           ),
                         ],
                       ),
                     ),
-
-                    // Destination
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           AppText(
-                            session.toCode,
-                            fontSize: 30,
+                            session.toCity,
+                            fontSize: 18,
                             fontWeight: FontWeight.w800,
                             color: AppColors.amber,
                             poppins: true,
-                            height: 1.0,
+                            height: 1.1,
+                            maxLines: 1,
+                            textAlign: TextAlign.end,
                           ),
-                          const SizedBox(height: 3),
+                          const SizedBox(height: 2),
                           AppText(
-                            session.toCity,
+                            session.toCountry,
                             fontSize: 11,
                             fontWeight: FontWeight.w500,
                             color: AppColors.tx3,
@@ -567,41 +598,49 @@ class _BoardingPassCard extends StatelessWidget {
                 ),
               ),
 
-              // ── Perforated divider ────────────────────────────────────────
+              // Perforated divider
               SizedBox(
-                height: 16,
+                height: 14,
                 child: CustomPaint(
-                  painter: _PerforatedDividerPainter(),
-                  size: const Size.fromHeight(16),
+                  painter: _PerforatedLinePainter(),
+                  size: const Size.fromHeight(14),
                 ),
               ),
 
-              // ── Stats row ─────────────────────────────────────────────────
+              // Stats
               Padding(
                 padding: const EdgeInsets.fromLTRB(8, 12, 8, 16),
                 child: Row(
                   children: [
                     Expanded(
                       child: _StatTile(
-                        icon: Icons.straighten_rounded,
-                        label: isLao ? 'ລະຍະທາງ' : 'DISTANCE',
+                        icon: Icons.route_rounded,
+                        label: 'DISTANCE',
                         value: distance,
                       ),
                     ),
-                    _vDivider(),
+                    Container(
+                      width: 1,
+                      height: 42,
+                      color: Colors.white.withValues(alpha: 0.1),
+                    ),
                     Expanded(
                       child: _StatTile(
                         icon: Icons.timer_outlined,
-                        label: isLao ? 'ໂຟກັດ' : 'FOCUS TIME',
-                        value: focusTime,
+                        label: 'DRIVE TIME',
+                        value: driveTime,
                         mono: true,
                       ),
                     ),
-                    _vDivider(),
+                    Container(
+                      width: 1,
+                      height: 42,
+                      color: Colors.white.withValues(alpha: 0.1),
+                    ),
                     Expanded(
                       child: _StatTile(
                         icon: Icons.event_seat_outlined,
-                        label: isLao ? 'ບ່ອນນັ່ງ' : 'SEAT',
+                        label: 'SEAT',
                         value: session.seatCode,
                       ),
                     ),
@@ -614,12 +653,6 @@ class _BoardingPassCard extends StatelessWidget {
       ),
     );
   }
-
-  Widget _vDivider() => Container(
-        width: 1,
-        height: 42,
-        color: Colors.white.withValues(alpha: 0.1),
-      );
 }
 
 class _GradientLinePainter extends CustomPainter {
@@ -646,7 +679,7 @@ class _GradientLinePainter extends CustomPainter {
   bool shouldRepaint(covariant _GradientLinePainter old) => false;
 }
 
-class _PerforatedDividerPainter extends CustomPainter {
+class _PerforatedLinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     const dashW = 5.0;
@@ -656,7 +689,6 @@ class _PerforatedDividerPainter extends CustomPainter {
       ..strokeWidth = 1.2
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
-
     var x = 14.0;
     final y = size.height / 2;
     while (x < size.width - 14) {
@@ -666,7 +698,7 @@ class _PerforatedDividerPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _PerforatedDividerPainter old) => false;
+  bool shouldRepaint(covariant _PerforatedLinePainter old) => false;
 }
 
 class _StatTile extends StatelessWidget {
@@ -722,24 +754,21 @@ class _ShareButton extends StatelessWidget {
   const _ShareButton({
     required this.session,
     required this.distance,
-    required this.focusTime,
+    required this.driveTime,
     required this.dateStr,
-    required this.isLao,
   });
 
-  final LiveFlightSession session;
+  final RoadTripSession session;
   final String distance;
-  final String focusTime;
+  final String driveTime;
   final String dateStr;
-  final bool isLao;
 
-  String get _shareText {
-    final from = '${session.fromCode} (${session.fromCity})';
-    final to = '${session.toCode} (${session.toCity})';
-    return isLao
-        ? '✈️ ສຳເລັດການບິນ!\n\n$from → $to\n💺 ທີ່ນັ່ງ ${session.seatCode}  ·  📏 $distance  ·  ⏱ $focusTime\n📅 $dateStr\n\nໂຟກັດຕັ້ງແຕ່離陸ຈົນລົງຈອດດ້ວຍ FocusFlight ✨'
-        : '✈️ FocusFlight Complete!\n\n$from → $to\n💺 Seat ${session.seatCode}  ·  📏 $distance  ·  ⏱ $focusTime\n📅 $dateStr\n\nStayed focused from takeoff to landing ✨\n#FocusFlight';
-  }
+  String get _shareText =>
+      '🚗 Road Trip Complete!\n\n'
+      '${session.fromCity} → ${session.toCity}\n'
+      '💺 Seat ${session.seatCode}  ·  📏 $distance  ·  ⏱ $driveTime\n'
+      '📅 $dateStr\n\n'
+      'Focused the whole drive ✨\n#FocusFlight #RoadTrip';
 
   @override
   Widget build(BuildContext context) {
@@ -776,11 +805,11 @@ class _ShareButton extends StatelessWidget {
                     ),
                     const SizedBox(width: 10),
                     AppText(
-                      isLao ? 'ແບ່ງປັນໃຫ້ໝູ່' : 'Share with friends',
+                      'Share with friends',
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
                       color: Colors.white.withValues(alpha: 0.85),
-                      poppins: !isLao,
+                      poppins: true,
                     ),
                   ],
                 ),
@@ -795,10 +824,6 @@ class _ShareButton extends StatelessWidget {
 }
 
 class _HomeButton extends StatelessWidget {
-  const _HomeButton({required this.isLao});
-
-  final bool isLao;
-
   @override
   Widget build(BuildContext context) {
     return SizedBox(
@@ -825,23 +850,19 @@ class _HomeButton extends StatelessWidget {
               Get.offAllNamed(AppRoutes.home);
             },
             borderRadius: BorderRadius.circular(18),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 17),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 17),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(
-                    Icons.home_rounded,
-                    size: 20,
-                    color: Color(0xFF0A0B0D),
-                  ),
-                  const SizedBox(width: 10),
+                  Icon(Icons.home_rounded, size: 20, color: Color(0xFF0A0B0D)),
+                  SizedBox(width: 10),
                   AppText(
-                    isLao ? 'ກັບໜ້າຫຼັກ' : 'Back to home',
+                    'Back to home',
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
-                    color: const Color(0xFF0A0B0D),
-                    poppins: !isLao,
+                    color: Color(0xFF0A0B0D),
+                    poppins: true,
                   ),
                 ],
               ),

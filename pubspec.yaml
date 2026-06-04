@@ -47,6 +47,8 @@ dependencies:
   equatable: ^2.0.5
   flutter_dotenv: ^6.0.1
   geolocator: ^14.0.2
+  audioplayers: ^6.1.0
+  share_plus: ^10.1.4
 
 dev_dependencies:
   flutter_test:
@@ -62,8 +64,8 @@ flutter:
     - assets/lottie/
     - assets/icons/
     - assets/images/
-    - assets/UI/
     - assets/translations/
+    - assets/sounds/
     - assets/data/airport_search_index.json
 
 

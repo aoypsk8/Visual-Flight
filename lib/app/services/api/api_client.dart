@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:pretty_dio_logger/pretty_dio_logger.dart';
 
+import '../../config/api_urls.dart';
 import '../../config/app_env.dart';
 import 'api_dio_factory.dart';
 import 'api_exception.dart';
@@ -15,7 +16,7 @@ class ApiClient {
 
   factory ApiClient.create() {
     final dio = ApiDioFactory.create(
-      baseUrl: AppEnv.baseUrl,
+      baseUrl: ApiHosts.focusFlight,
       headers: {
         'Content-Type': 'application/json',
         if (AppEnv.apiKey.isNotEmpty) 'x-api-key': AppEnv.apiKey,

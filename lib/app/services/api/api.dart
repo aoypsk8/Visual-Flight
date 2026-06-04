@@ -5,3 +5,6 @@ export 'api_client.dart';
 export 'api_dio_factory.dart';
 export 'api_exception.dart';
 export 'api_response.dart';
+export 'mapbox_api_client.dart';
+export 'mapbox_directions_api_service.dart';
+export '../../config/api_urls.dart';

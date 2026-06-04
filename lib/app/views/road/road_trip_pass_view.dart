@@ -4,58 +4,60 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' hide Size;
 import '../../config/api_urls.dart';
-import '../../models/live_flight_session.dart';
+import '../../models/road_trip_session.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/flight_route_utils.dart';
 import '../../widgets/common/app_text.dart';
 import '../../widgets/map/deferred_map_host.dart';
-import '../live/live_flight_view.dart';
+import 'road_live_view.dart';
 
 const double _kTearRatio = 0.72;
 const double _kMaxDragPx = 260.0;
 const double _kSnapThreshold = 0.48;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Entry
+// Entry widget
 // ─────────────────────────────────────────────────────────────────────────────
 
-class BoardingPassView extends StatefulWidget {
-  final String fromCode;
+class RoadTripPassView extends StatefulWidget {
   final String fromCity;
-  final String toCode;
+  final String fromCountry;
   final String toCity;
+  final String toCountry;
   final String seatCode;
   final double distanceKm;
-  final Duration flightDuration;
+  final Duration duration;
   final double? fromLat;
   final double? fromLng;
   final double? toLat;
   final double? toLng;
+  final List<List<double>> routeCoords;
 
-  const BoardingPassView({
+  const RoadTripPassView({
     super.key,
-    required this.fromCode,
     required this.fromCity,
-    required this.toCode,
+    required this.fromCountry,
     required this.toCity,
+    required this.toCountry,
     required this.seatCode,
     required this.distanceKm,
-    required this.flightDuration,
+    required this.duration,
     this.fromLat,
     this.fromLng,
     this.toLat,
     this.toLng,
+    this.routeCoords = const [],
   });
 
   @override
-  State<BoardingPassView> createState() => _BoardingPassState();
+  State<RoadTripPassView> createState() => _RoadTripPassState();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // State
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _BoardingPassState extends State<BoardingPassView>
+class _RoadTripPassState extends State<RoadTripPassView>
     with TickerProviderStateMixin {
   late final AnimationController _tearCtrl;
   late final AnimationController _hintCtrl;
@@ -72,10 +74,11 @@ class _BoardingPassState extends State<BoardingPassView>
   @override
   void initState() {
     super.initState();
+
     final now = DateTime.now();
     _dateStr =
         '${now.year}/${now.month.toString().padLeft(2, '0')}/${now.day.toString().padLeft(2, '0')}';
-    _durationStr = FlightRouteUtils.formatDurationCompact(widget.flightDuration);
+    _durationStr = FlightRouteUtils.formatDurationCompact(widget.duration);
     _distanceStr = FlightRouteUtils.formatDistance(widget.distanceKm);
 
     _tearCtrl = AnimationController(
@@ -107,8 +110,7 @@ class _BoardingPassState extends State<BoardingPassView>
     if (fl != null && flng != null && tl != null && tlng != null) {
       final midLat = (fl + tl) / 2;
       final midLng = (flng + tlng) / 2;
-      final span =
-          math.max((fl - tl).abs(), (flng - tlng).abs());
+      final span = math.max((fl - tl).abs(), (flng - tlng).abs());
       final zoom = span < 2
           ? 9.0
           : span < 5
@@ -121,7 +123,7 @@ class _BoardingPassState extends State<BoardingPassView>
       await map.setCamera(CameraOptions(
         center: Point(coordinates: Position(midLng, midLat)),
         zoom: zoom,
-        pitch: 35.0,
+        pitch: 40.0,
         bearing: 0,
       ));
     }
@@ -200,22 +202,22 @@ class _BoardingPassState extends State<BoardingPassView>
           HapticFeedback.heavyImpact();
           Future.delayed(const Duration(milliseconds: 200), () {
             if (!mounted) return;
-            final session = LiveFlightSession.fromBoarding(
-              fromCode: widget.fromCode,
+            final session = RoadTripSession(
               fromCity: widget.fromCity,
-              toCode: widget.toCode,
+              fromCountry: widget.fromCountry,
               toCity: widget.toCity,
+              toCountry: widget.toCountry,
               seatCode: widget.seatCode,
-              distanceKm: widget.distanceKm,
-              flightDuration: widget.flightDuration,
-              fromLat: widget.fromLat,
-              fromLng: widget.fromLng,
-              toLat: widget.toLat,
-              toLng: widget.toLng,
+              totalKm: widget.distanceKm,
+              totalSeconds: widget.duration.inSeconds,
+              startedAt: DateTime.now(),
+              fromLat: widget.fromLat ?? 0.0,
+              fromLng: widget.fromLng ?? 0.0,
+              toLat: widget.toLat ?? 0.0,
+              toLng: widget.toLng ?? 0.0,
+              routeCoords: widget.routeCoords,
             );
-            Get.off(
-              () => LiveFlightView(session: session),
-            );
+            Get.off(() => RoadLiveView(session: session));
           });
         });
   }
@@ -245,10 +247,8 @@ class _BoardingPassState extends State<BoardingPassView>
         : 0.0;
     final perfGlow = math.max(dragGlow, hintGlow);
 
-    Widget card({double glow = 0.0}) => _TicketCard(
-          fromCode: widget.fromCode,
+    Widget card({double glow = 0.0}) => _RoadTicketCard(
           fromCity: widget.fromCity,
-          toCode: widget.toCode,
           toCity: widget.toCity,
           seatCode: widget.seatCode,
           distanceStr: _distanceStr,
@@ -261,8 +261,6 @@ class _BoardingPassState extends State<BoardingPassView>
       return card(glow: perfGlow);
     }
 
-    // Gentle peel: linear mapping keeps drag 1:1 with movement.
-    // Small angle so the piece droops naturally rather than swinging rigidly.
     final botAngle = 0.22 * t;
     final botOffset = Offset(48 * t, 68 * t);
     final botFade =
@@ -288,8 +286,7 @@ class _BoardingPassState extends State<BoardingPassView>
           ),
         ),
 
-        // Bottom portion (barcode) — peels away from the perforation line.
-        // Rotation pivot = top-center of this piece = the tear edge.
+        // Bottom portion (barcode stub) — peels away.
         Positioned(
           bottom: 0,
           left: 0,
@@ -330,17 +327,18 @@ class _BoardingPassState extends State<BoardingPassView>
           return Stack(
             fit: StackFit.expand,
             children: [
-              // ── Satellite map background ─────────────────────────────
+              // ── Navigation-night map background ──────────────────────────
               IgnorePointer(
                 child: DeferredMapHost(
                   builder: (_) => MapWidget(
-                    styleUri: MapboxResourceUris.satelliteStreetsV12,
+                    styleUri:
+                        MapboxResourceUris.navigationNightV1,
                     onMapCreated: _onMapCreated,
                   ),
                 ),
               ),
 
-              // ── Dark overlay — fades to amber glow on completion ─────
+              // ── Dark overlay ─────────────────────────────────────────────
               AnimatedContainer(
                 duration: const Duration(milliseconds: 500),
                 color: torn
@@ -352,24 +350,31 @@ class _BoardingPassState extends State<BoardingPassView>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _PageHeader(torn: torn),
+                    _RoadPassHeader(torn: torn),
                     Expanded(
                       child: Center(
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 20),
                           child: GestureDetector(
-                            onHorizontalDragStart: torn ? null : _onDragStart,
-                            onHorizontalDragUpdate: torn ? null : _onDragUpdate,
-                            onHorizontalDragEnd: torn ? null : _onDragEnd,
-                            onHorizontalDragCancel: torn ? null : _onDragCancel,
+                            onHorizontalDragStart:
+                                torn ? null : _onDragStart,
+                            onHorizontalDragUpdate:
+                                torn ? null : _onDragUpdate,
+                            onHorizontalDragEnd:
+                                torn ? null : _onDragEnd,
+                            onHorizontalDragCancel:
+                                torn ? null : _onDragCancel,
                             child: _buildTearable(t),
                           ),
                         ),
                       ),
                     ),
-                    _CheckInButton(
+                    _RoadStartButton(
                       progress: t,
-                      onTap: (!torn && !_isDragging && !_tearCtrl.isAnimating)
+                      onTap: (!torn &&
+                              !_isDragging &&
+                              !_tearCtrl.isAnimating)
                           ? _completeTear
                           : null,
                       bottomPad: mq.padding.bottom,
@@ -377,9 +382,10 @@ class _BoardingPassState extends State<BoardingPassView>
                   ],
                 ),
               ),
+
               if (_hintActive)
                 IgnorePointer(
-                  child: _HintOverlay(progress: _hintCtrl.value),
+                  child: _RoadHintOverlay(progress: _hintCtrl.value),
                 ),
             ],
           );
@@ -390,12 +396,12 @@ class _BoardingPassState extends State<BoardingPassView>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Hint overlay — swipe-up finger animation
+// Hint overlay
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _HintOverlay extends StatelessWidget {
+class _RoadHintOverlay extends StatelessWidget {
   final double progress;
-  const _HintOverlay({required this.progress});
+  const _RoadHintOverlay({required this.progress});
 
   @override
   Widget build(BuildContext context) {
@@ -410,15 +416,15 @@ class _HintOverlay extends StatelessWidget {
       opacity: opacity,
       child: Align(
         alignment: Alignment(alignX, 0.08),
-        child: _HintFinger(progress: progress),
+        child: _RoadHintFinger(progress: progress),
       ),
     );
   }
 }
 
-class _HintFinger extends StatelessWidget {
+class _RoadHintFinger extends StatelessWidget {
   final double progress;
-  const _HintFinger({required this.progress});
+  const _RoadHintFinger({required this.progress});
 
   @override
   Widget build(BuildContext context) {
@@ -492,12 +498,12 @@ class _HintFinger extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Header
+// Page header
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _PageHeader extends StatelessWidget {
+class _RoadPassHeader extends StatelessWidget {
   final bool torn;
-  const _PageHeader({required this.torn});
+  const _RoadPassHeader({required this.torn});
 
   @override
   Widget build(BuildContext context) {
@@ -513,14 +519,16 @@ class _PageHeader extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const AppText(
-                  'Check in',
+                  'Road Trip',
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
                   color: Colors.white,
                   poppins: true,
                 ),
                 AppText(
-                  torn ? 'Boarding confirmed!' : 'Swipe right or tap to tear',
+                  torn
+                      ? 'Drive confirmed — let\'s go!'
+                      : 'Swipe to start your drive',
                   fontSize: 12,
                   color: Colors.white.withValues(alpha: 0.40),
                   poppins: true,
@@ -555,7 +563,8 @@ class _HeaderBtn extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.07),
           borderRadius: BorderRadius.circular(13),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+          border:
+              Border.all(color: Colors.white.withValues(alpha: 0.10)),
         ),
         child: Icon(
           icon,
@@ -568,18 +577,20 @@ class _HeaderBtn extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Boarding ticket card
+// Road trip ticket card
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _TicketCard extends StatelessWidget {
-  final String fromCode, fromCity, toCode, toCity, seatCode;
-  final String distanceStr, durationStr, dateStr;
+class _RoadTicketCard extends StatelessWidget {
+  final String fromCity;
+  final String toCity;
+  final String seatCode;
+  final String distanceStr;
+  final String durationStr;
+  final String dateStr;
   final double perfGlow;
 
-  const _TicketCard({
-    required this.fromCode,
+  const _RoadTicketCard({
     required this.fromCity,
-    required this.toCode,
     required this.toCity,
     required this.seatCode,
     required this.distanceStr,
@@ -613,19 +624,18 @@ class _TicketCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(22),
         child: Stack(
           children: [
+            // Subtle road map background pattern
             Positioned.fill(
               child: CustomPaint(
-                painter: _WorldMapPainter(),
+                painter: _RoadMapPainter(),
                 child: const SizedBox.expand(),
               ),
             ),
             Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _TicketInfoSection(
-                  fromCode: fromCode,
+                _RoadTicketInfoSection(
                   fromCity: fromCity,
-                  toCode: toCode,
                   toCity: toCity,
                   seatCode: seatCode,
                   distanceStr: distanceStr,
@@ -635,9 +645,9 @@ class _TicketCard extends StatelessWidget {
                 _Perforation(glow: perfGlow),
                 ColoredBox(
                   color: const Color(0xFF0B0B0E),
-                  child: _BarcodeSection(
-                    barcodeLabel:
-                        '$fromCode $toCode $seatCode · ${dateStr.replaceAll('/', ' ')}',
+                  child: _RoadBarcodeSection(
+                    label:
+                        '$fromCity · $toCity · $seatCode · ${dateStr.replaceAll('/', ' ')}',
                   ),
                 ),
               ],
@@ -650,99 +660,72 @@ class _TicketCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// World map background painter
+// Road map background (simplified street-grid decoration)
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _WorldMapPainter extends CustomPainter {
+class _RoadMapPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final fill = Paint()
-      ..color = Colors.white.withValues(alpha: 0.07)
-      ..style = PaintingStyle.fill;
-    final stroke = Paint()
-      ..color = Colors.white.withValues(alpha: 0.11)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.6;
+    final paint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.045)
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
 
-    for (final pts in _continents) {
-      final path = Path();
-      path.moveTo(pts[0][0] * size.width, pts[0][1] * size.height);
-      for (int i = 1; i < pts.length; i++) {
-        path.lineTo(pts[i][0] * size.width, pts[i][1] * size.height);
+    final w = size.width;
+    final h = size.height;
+
+    // Horizontal road lines
+    for (var i = 1; i <= 6; i++) {
+      final y = h * i / 7;
+      canvas.drawLine(Offset(0, y), Offset(w, y), paint);
+    }
+
+    // Vertical road lines
+    for (var i = 1; i <= 4; i++) {
+      final x = w * i / 5;
+      canvas.drawLine(Offset(x, 0), Offset(x, h), paint);
+    }
+
+    // Diagonal route line (destination path feel)
+    final routePaint = Paint()
+      ..color = AppColors.amber.withValues(alpha: 0.08)
+      ..strokeWidth = 3.0
+      ..style = PaintingStyle.stroke;
+    canvas.drawLine(Offset(0, h * 0.7), Offset(w, h * 0.15), routePaint);
+
+    // Intersection dots
+    final dotPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.06)
+      ..style = PaintingStyle.fill;
+    for (var i = 1; i <= 4; i++) {
+      for (var j = 1; j <= 6; j++) {
+        canvas.drawCircle(
+          Offset(w * i / 5, h * j / 7),
+          2.5,
+          dotPaint,
+        );
       }
-      path.close();
-      canvas.drawPath(path, fill);
-      canvas.drawPath(path, stroke);
     }
   }
 
-  // Normalized (x, y) continent outlines — equirectangular projection.
-  // x: 0 = 180°W → 1 = 180°E   |   y: 0 = 90°N → 1 = 90°S
-  static const List<List<List<double>>> _continents = [
-    // Greenland
-    [
-      [0.27, 0.03], [0.35, 0.01], [0.39, 0.04], [0.38, 0.12],
-      [0.34, 0.17], [0.28, 0.17], [0.24, 0.12], [0.24, 0.06],
-    ],
-    // North America
-    [
-      [0.04, 0.14], [0.10, 0.10], [0.20, 0.10], [0.31, 0.11],
-      [0.34, 0.24], [0.31, 0.36], [0.28, 0.42], [0.26, 0.46],
-      [0.20, 0.45], [0.16, 0.38], [0.14, 0.33], [0.08, 0.28],
-      [0.06, 0.22],
-    ],
-    // South America
-    [
-      [0.26, 0.46], [0.33, 0.43], [0.38, 0.52], [0.38, 0.63],
-      [0.34, 0.72], [0.32, 0.82], [0.28, 0.93], [0.23, 0.94],
-      [0.21, 0.88], [0.19, 0.78], [0.19, 0.62], [0.20, 0.52],
-    ],
-    // Europe
-    [
-      [0.47, 0.07], [0.52, 0.07], [0.57, 0.12], [0.59, 0.20],
-      [0.57, 0.27], [0.54, 0.33], [0.52, 0.38], [0.50, 0.40],
-      [0.47, 0.38], [0.44, 0.36], [0.43, 0.30], [0.44, 0.22],
-      [0.45, 0.15],
-    ],
-    // Africa
-    [
-      [0.45, 0.32], [0.50, 0.28], [0.58, 0.28], [0.64, 0.34],
-      [0.65, 0.46], [0.63, 0.58], [0.60, 0.70], [0.56, 0.83],
-      [0.52, 0.91], [0.48, 0.90], [0.46, 0.82], [0.44, 0.72],
-      [0.44, 0.60], [0.46, 0.48], [0.44, 0.40],
-    ],
-    // Asia (mainland)
-    [
-      [0.57, 0.20], [0.62, 0.14], [0.72, 0.09], [0.82, 0.06],
-      [0.96, 0.10], [0.98, 0.20], [0.96, 0.28], [0.93, 0.34],
-      [0.91, 0.44], [0.88, 0.52], [0.86, 0.58], [0.83, 0.60],
-      [0.78, 0.56], [0.74, 0.56], [0.71, 0.57], [0.69, 0.46],
-      [0.67, 0.36], [0.65, 0.34], [0.62, 0.28], [0.59, 0.28],
-    ],
-    // Australia
-    [
-      [0.80, 0.62], [0.87, 0.58], [0.94, 0.63], [0.97, 0.70],
-      [0.97, 0.78], [0.94, 0.86], [0.88, 0.88], [0.82, 0.86],
-      [0.79, 0.80], [0.79, 0.70],
-    ],
-  ];
-
   @override
-  bool shouldRepaint(_WorldMapPainter old) => false;
+  bool shouldRepaint(_RoadMapPainter old) => false;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Info section (top ~72 % of the ticket)
+// Ticket info section (top ~72%)
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _TicketInfoSection extends StatelessWidget {
-  final String fromCode, fromCity, toCode, toCity, seatCode;
-  final String distanceStr, durationStr, dateStr;
+class _RoadTicketInfoSection extends StatelessWidget {
+  final String fromCity;
+  final String toCity;
+  final String seatCode;
+  final String distanceStr;
+  final String durationStr;
+  final String dateStr;
 
-  const _TicketInfoSection({
-    required this.fromCode,
+  const _RoadTicketInfoSection({
     required this.fromCity,
-    required this.toCode,
     required this.toCity,
     required this.seatCode,
     required this.distanceStr,
@@ -757,70 +740,46 @@ class _TicketInfoSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // IATA codes
+          // City names — large display (no IATA codes for road trips)
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
                 child: AppText(
-                  fromCode,
-                  fontSize: 52,
+                  fromCity,
+                  fontSize: 36,
                   fontWeight: FontWeight.w800,
                   color: Colors.white,
                   poppins: true,
-                  letterSpacing: -1.5,
+                  letterSpacing: -1.2,
                   height: 1.0,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              Column(
-                children: [
-                  AppText(
-                    durationStr,
-                    fontSize: 11,
-                    color: Colors.white.withValues(alpha: 0.45),
-                    poppins: true,
-                  ),
-                  const SizedBox(height: 4),
-                  Icon(
-                    Icons.flight_rounded,
-                    color: AppColors.amber.withValues(alpha: 0.85),
-                    size: 20,
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    width: 44,
-                    height: 1,
-                    color: Colors.white.withValues(alpha: 0.10),
-                  ),
-                ],
-              ),
-              Expanded(
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: AppText(
-                    toCode,
-                    fontSize: 52,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                    poppins: true,
-                    letterSpacing: -1.5,
-                    height: 1.0,
-                    textAlign: TextAlign.end,
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          // City names
-          Row(
-            children: [
-              Expanded(
-                child: AppText(
-                  fromCity,
-                  fontSize: 11,
-                  color: Colors.white.withValues(alpha: 0.38),
-                  poppins: true,
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: Column(
+                  children: [
+                    AppText(
+                      durationStr,
+                      fontSize: 11,
+                      color: Colors.white.withValues(alpha: 0.45),
+                      poppins: true,
+                    ),
+                    const SizedBox(height: 4),
+                    Icon(
+                      Icons.directions_car_rounded,
+                      color: AppColors.amber.withValues(alpha: 0.85),
+                      size: 20,
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      width: 44,
+                      height: 1,
+                      color: Colors.white.withValues(alpha: 0.10),
+                    ),
+                  ],
                 ),
               ),
               Expanded(
@@ -828,9 +787,44 @@ class _TicketInfoSection extends StatelessWidget {
                   alignment: Alignment.centerRight,
                   child: AppText(
                     toCity,
-                    fontSize: 11,
-                    color: Colors.white.withValues(alpha: 0.38),
+                    fontSize: 36,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
                     poppins: true,
+                    letterSpacing: -1.2,
+                    height: 1.0,
+                    textAlign: TextAlign.end,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          // Route arrow beneath city names
+          Row(
+            children: [
+              Expanded(
+                child: AppText(
+                  '↑ FROM',
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white.withValues(alpha: 0.30),
+                  poppins: true,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: AppText(
+                    'TO ↑',
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white.withValues(alpha: 0.30),
+                    poppins: true,
+                    letterSpacing: 1.2,
                     textAlign: TextAlign.end,
                   ),
                 ),
@@ -866,7 +860,7 @@ class _TicketInfoSection extends StatelessWidget {
           Row(
             children: [
               const Expanded(
-                child: _StatBlock(label: 'BOARDING', value: 'Now'),
+                child: _StatBlock(label: 'DEPART', value: 'Now'),
               ),
               Expanded(
                 child: _StatBlock(
@@ -926,7 +920,7 @@ class _StatBlock extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Perforation line — dashes + amber glow on tear
+// Perforation line
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _Perforation extends StatelessWidget {
@@ -988,12 +982,12 @@ class _PerforationPainter extends CustomPainter {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Barcode section (bottom ~28 % of the ticket)
+// Barcode / QR-style section (bottom ~28%)
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _BarcodeSection extends StatelessWidget {
-  final String barcodeLabel;
-  const _BarcodeSection({required this.barcodeLabel});
+class _RoadBarcodeSection extends StatelessWidget {
+  final String label;
+  const _RoadBarcodeSection({required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -1001,19 +995,33 @@ class _BarcodeSection extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 10, 20, 18),
       child: Column(
         children: [
-          Container(
-            height: 64,
-            clipBehavior: Clip.antiAlias,
-            decoration:
-                BoxDecoration(borderRadius: BorderRadius.circular(3)),
-            child: CustomPaint(
-              painter: _BarcodePainter(),
-              child: const SizedBox.expand(),
-            ),
+          // QR-style pattern (reuses _BarcodePainter visual language)
+          Row(
+            children: [
+              // QR finder squares on left
+              _QrFinderBox(),
+              const SizedBox(width: 12),
+              // Barcode fills the remaining space
+              Expanded(
+                child: Container(
+                  height: 64,
+                  clipBehavior: Clip.antiAlias,
+                  decoration:
+                      BoxDecoration(borderRadius: BorderRadius.circular(3)),
+                  child: CustomPaint(
+                    painter: _BarcodePainter(),
+                    child: const SizedBox.expand(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              // QR finder square on right
+              _QrFinderBox(),
+            ],
           ),
           const SizedBox(height: 10),
           AppText(
-            barcodeLabel.toUpperCase(),
+            label.toUpperCase(),
             fontSize: 9,
             fontWeight: FontWeight.w500,
             color: Colors.white.withValues(alpha: 0.30),
@@ -1029,11 +1037,61 @@ class _BarcodeSection extends StatelessWidget {
   }
 }
 
+class _QrFinderBox extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: const Size(42, 42),
+      painter: _QrFinderPainter(),
+    );
+  }
+}
+
+class _QrFinderPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final s = size.width;
+    final outerPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.70)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0;
+    final innerPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.70)
+      ..style = PaintingStyle.fill;
+
+    // Outer square
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(0, 0, s, s),
+        const Radius.circular(4),
+      ),
+      outerPaint,
+    );
+    // Inner filled square
+    final inner = s * 0.35;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          (s - inner) / 2,
+          (s - inner) / 2,
+          inner,
+          inner,
+        ),
+        const Radius.circular(2),
+      ),
+      innerPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_QrFinderPainter old) => false;
+}
+
 class _BarcodePainter extends CustomPainter {
   static final List<double> _pattern = _buildPattern();
 
   static List<double> _buildPattern() {
-    final rng = math.Random(0x4F3A7B);
+    final rng = math.Random(0x52D19C);
     final list = <double>[];
     double total = 0;
     while (total < 0.97) {
@@ -1067,15 +1125,15 @@ class _BarcodePainter extends CustomPainter {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// "Check in" / "Confirmed!" button
+// "Start drive" button
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _CheckInButton extends StatelessWidget {
+class _RoadStartButton extends StatelessWidget {
   final double progress;
   final VoidCallback? onTap;
   final double bottomPad;
 
-  const _CheckInButton({
+  const _RoadStartButton({
     required this.progress,
     required this.onTap,
     required this.bottomPad,
@@ -1103,9 +1161,10 @@ class _CheckInButton extends StatelessWidget {
             boxShadow: enabled
                 ? [
                     BoxShadow(
-                      color:
-                          (progress > 0.15 ? AppColors.amber : Colors.white)
-                              .withValues(alpha: 0.15),
+                      color: (progress > 0.15
+                              ? AppColors.amber
+                              : Colors.white)
+                          .withValues(alpha: 0.15),
                       blurRadius: 22,
                       offset: const Offset(0, 7),
                     ),
@@ -1119,7 +1178,7 @@ class _CheckInButton extends StatelessWidget {
                     Icon(Icons.check_rounded, color: textColor, size: 18),
                     const SizedBox(width: 8),
                     AppText(
-                      'Confirmed!',
+                      'Drive started!',
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: textColor,
@@ -1128,15 +1187,18 @@ class _CheckInButton extends StatelessWidget {
                   ]
                 : [
                     AppText(
-                      'Check in',
+                      'Start drive',
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: textColor,
                       poppins: true,
                     ),
                     const SizedBox(width: 8),
-                    Icon(Icons.arrow_forward_rounded,
-                        color: textColor, size: 18),
+                    Icon(
+                      Icons.arrow_forward_rounded,
+                      color: textColor,
+                      size: 18,
+                    ),
                   ],
           ),
         ),

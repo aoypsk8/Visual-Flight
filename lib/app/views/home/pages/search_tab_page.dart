@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' hide Size;
+import '../../../config/api_urls.dart';
 import '../../../controllers/search_controller.dart';
 import '../../../utils/app_colors.dart';
 import '../../../widgets/common/app_text.dart';
+import '../../../widgets/map/deferred_map_host.dart';
+import '../../../widgets/map/live_map_chrome.dart';
 import '../../../widgets/navigation/app_bottom_nav.dart';
 import 'search/route_card.dart';
 import 'search/search_route_ux.dart';
@@ -90,20 +93,22 @@ class SearchTabPage extends StatelessWidget {
           return Stack(
             fit: StackFit.expand,
             children: [
-              Obx(() {
-                final followDevice = ctrl.to.value == null;
-                return MapWidget(
-                  styleUri: 'mapbox://styles/mapbox/satellite-streets-v12',
-                  viewport: followDevice
-                      ? const FollowPuckViewportState(
-                          zoom: 4.5,
-                          pitch: 30.0,
-                          bearing: FollowPuckViewportStateBearingConstant(0),
-                        )
-                      : const IdleViewportState(),
+              DeferredMapHost(
+                onMountChanged: (mounted) {
+                  if (!mounted) ctrl.onSearchMapUnmounted();
+                },
+                builder: (context) => MapWidget(
+                  key: const ValueKey('search-map'),
+                  styleUri: MapboxResourceUris.satelliteStreetsV12,
+                  viewport: const FollowPuckViewportState(
+                    zoom: 4.5,
+                    pitch: 30.0,
+                    bearing: FollowPuckViewportStateBearingConstant(0),
+                  ),
                   onMapCreated: ctrl.onMapCreated,
-                );
-              }),
+                  onStyleLoadedListener: ctrl.onSearchMapStyleLoaded,
+                ),
+              ),
 
               Positioned(
                 top: 0,
@@ -146,6 +151,21 @@ class SearchTabPage extends StatelessWidget {
                 ),
               ),
 
+              // โหลดเส้นทางถนน (Car) — overlay บนแผนที่ ไม่บัง route card
+              Obx(() {
+                final show = ctrl.travelMode.value == TravelMode.drive &&
+                    ctrl.loadingRoadRoute.value &&
+                    ctrl.to.value != null;
+                if (!show) return const SizedBox.shrink();
+                return const Positioned.fill(
+                  child: IgnorePointer(
+                    child: LiveMapLoadingOverlay(
+                      message: 'Finding road route…',
+                    ),
+                  ),
+                );
+              }),
+
               SafeArea(
                 bottom: false,
                 child: Column(
@@ -161,6 +181,8 @@ class SearchTabPage extends StatelessWidget {
                       child: Obx(
                         () => _SearchTabHeader(
                           step: ctrl.routeUxStep,
+                          travelMode: ctrl.travelMode.value,
+                          onToggleMode: ctrl.toggleTravelMode,
                           layout: layout,
                         ),
                       ),
@@ -173,11 +195,13 @@ class SearchTabPage extends StatelessWidget {
                           from: ctrl.from.value,
                           to: ctrl.to.value,
                           loadingFrom: ctrl.loadingLocation.value,
+                          loadingRoadRoute: ctrl.loadingRoadRoute.value,
+                          isDriveMode: ctrl.travelMode.value == TravelMode.drive,
                           step: ctrl.routeUxStep,
                           routeLabel: ctrl.routeSummaryLabel,
                           fromIsCurrentLocation: ctrl.fromIsCurrentLocation,
-                          distanceKm: ctrl.routeDistanceKm,
-                          flightDuration: ctrl.routeFlightDuration,
+                          distanceKm: ctrl.displayDistanceKm,
+                          flightDuration: ctrl.displayDuration,
                           onFromTap: () => ctrl.pickAirport(isFrom: true),
                           onToTap: () => ctrl.pickAirport(isFrom: false),
                           onSwap: ctrl.swap,
@@ -186,6 +210,9 @@ class SearchTabPage extends StatelessWidget {
                         actionButton: _PrimaryActionButton(
                           step: ctrl.routeUxStep,
                           layout: layout,
+                          travelMode: ctrl.travelMode.value,
+                          loadingRoadRoute: ctrl.loadingRoadRoute.value,
+                          enabled: ctrl.primaryActionEnabled,
                           onTap: ctrl.onPrimaryAction,
                         ),
                       ),
@@ -202,16 +229,24 @@ class SearchTabPage extends StatelessWidget {
 }
 
 class _SearchTabHeader extends StatelessWidget {
-  const _SearchTabHeader({required this.step, required this.layout});
+  const _SearchTabHeader({
+    required this.step,
+    required this.travelMode,
+    required this.onToggleMode,
+    required this.layout,
+  });
 
   final SearchRouteUxStep step;
+  final TravelMode travelMode;
+  final VoidCallback onToggleMode;
   final _SearchTabLayout layout;
 
   @override
   Widget build(BuildContext context) {
+    final isDrive = travelMode == TravelMode.drive;
     final title = step == SearchRouteUxStep.routeReady
-        ? 'Your route'
-        : 'Find your flight';
+        ? (isDrive ? 'Your drive' : 'Your route')
+        : (isDrive ? 'Plan a drive' : 'Find your flight');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -235,6 +270,7 @@ class _SearchTabHeader extends StatelessWidget {
               letterSpacing: layout.width < 360 ? 2.4 : 3.2,
               poppins: true,
             ),
+            const Spacer(),
           ],
         ),
         SizedBox(height: layout.width < 360 ? 8 : 10),
@@ -257,6 +293,7 @@ class _SearchTabHeader extends StatelessWidget {
     );
   }
 }
+
 
 /// Route card expands from / collapses into the airplane FAB (bottom-right).
 class _CollapsibleRoutePanel extends StatefulWidget {
@@ -503,17 +540,26 @@ class _PrimaryActionButton extends StatelessWidget {
   const _PrimaryActionButton({
     required this.step,
     required this.layout,
+    required this.travelMode,
+    required this.loadingRoadRoute,
+    required this.enabled,
     required this.onTap,
   });
 
   final SearchRouteUxStep step;
   final _SearchTabLayout layout;
+  final TravelMode travelMode;
+  final bool loadingRoadRoute;
+  final bool enabled;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final enabled = step.primaryEnabled;
+    final isDrive = travelMode == TravelMode.drive;
     final filled = step == SearchRouteUxStep.routeReady;
+    // แสดง spinner ตอนดึง Directions (Car + มีปลายทางแล้ว)
+    final showLoading =
+        isDrive && loadingRoadRoute && step == SearchRouteUxStep.routeReady;
 
     return Material(
       color: Colors.transparent,
@@ -541,21 +587,39 @@ class _PrimaryActionButton extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                filled
-                    ? Icons.airline_seat_recline_normal_rounded
-                    : Icons.flight_takeoff_rounded,
-                size: layout.width < 360 ? 18 : 20,
-                color: filled
-                    ? const Color(0xFF0A0B0D)
-                    : enabled
-                        ? AppColors.amber
-                        : Colors.white.withValues(alpha: 0.3),
-              ),
+              if (showLoading)
+                SizedBox(
+                  width: layout.width < 360 ? 18 : 20,
+                  height: layout.width < 360 ? 18 : 20,
+                  child: const CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Color(0xFF0A0B0D),
+                  ),
+                )
+              else
+                Icon(
+                  filled
+                      ? (isDrive
+                          ? Icons.directions_car_rounded
+                          : Icons.airline_seat_recline_normal_rounded)
+                      : (isDrive
+                          ? Icons.directions_car_outlined
+                          : Icons.flight_takeoff_rounded),
+                  size: layout.width < 360 ? 18 : 20,
+                  color: filled
+                      ? const Color(0xFF0A0B0D)
+                      : enabled
+                          ? AppColors.amber
+                          : Colors.white.withValues(alpha: 0.3),
+                ),
               const SizedBox(width: 10),
               Flexible(
                 child: AppText(
-                  step.primaryLabel,
+                  showLoading
+                      ? 'Loading route…'
+                      : (filled && isDrive
+                          ? 'Select seat'
+                          : step.primaryLabel),
                   fontSize: layout.width < 360 ? 15 : 16,
                   fontWeight: FontWeight.w700,
                   color: filled
