@@ -86,6 +86,8 @@ class FlightSearchController extends GetxController {
   void onInit() {
     super.onInit();
     ever(travelMode, (_) => unawaited(_onTravelModeChanged()));
+    // ไม่รอ Mapbox — ดึง GPS ทันที (เดิมรอ style โหลดจึงค้าง "Detecting location…")
+    unawaited(_resolveFromNearestAirport());
   }
 
   /// Called from Home tab to refresh route when switching Flight ↔ Car
@@ -182,29 +184,58 @@ class FlightSearchController extends GetxController {
   bool _mapSessionAlive = false;
   bool _styleLayersAdded = false;
   int _mapSetupGen = 0;
+  int _locationResolveGen = 0;
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   // Location puck setup runs after the map is ready (same as the former home tab).
 
   Future<void> _resolveFromNearestAirport() async {
+    final gen = ++_locationResolveGen;
     loadingLocation.value = true;
-    final pos = await _locationService.getCurrentPosition();
-    _fromPinnedToAirport = false;
-    if (pos != null) {
-      fromLat.value = pos.latitude;
-      fromLng.value = pos.longitude;
-      from.value = await _airportRepo.findNearestAirport(
-        pos.latitude,
-        pos.longitude,
-      );
-    } else {
-      fromLat.value = null;
-      fromLng.value = null;
-      from.value = null;
+    try {
+      final pos = await _locationService.getCurrentPosition();
+      _fromPinnedToAirport = false;
+      if (pos != null) {
+        fromLat.value = pos.latitude;
+        fromLng.value = pos.longitude;
+        from.value = await _airportRepo.findNearestAirport(
+          pos.latitude,
+          pos.longitude,
+        );
+      } else {
+        fromLat.value = null;
+        fromLng.value = null;
+        from.value = null;
+      }
+
+      if (gen != _locationResolveGen) return;
+
+      if (from.value == null) {
+        await _applyFallbackOrigin();
+      }
+    } finally {
+      if (gen == _locationResolveGen) {
+        loadingLocation.value = false;
+      }
     }
-    loadingLocation.value = false;
+
+    if (gen != _locationResolveGen) return;
+
     await _updateRoute();
+    if (_styleLayersAdded && mapCtrl != null) {
+      await _fitCamera(animate: false);
+    }
+  }
+
+  /// เมื่อ GPS ปิด/ปฏิเสธ — ให้เลือกต้นทาง BKK แทนการค้างโหลด
+  Future<void> _applyFallbackOrigin() async {
+    final airport = await _airportRepo.findByIata('BKK');
+    if (airport == null) return;
+    _fromPinnedToAirport = true;
+    from.value = airport;
+    fromLat.value = null;
+    fromLng.value = null;
   }
 
   /// Route origin coordinates — device GPS when [fromIsCurrentLocation], else airport.
@@ -421,7 +452,11 @@ class FlightSearchController extends GetxController {
     }
 
     if (!_mapSessionAlive || gen != _mapSetupGen) return;
-    await _resolveFromNearestAirport();
+
+    await _syncRouteLayers();
+    if (from.value != null) {
+      await _fitCamera(animate: false);
+    }
   }
 
   /// Fetches real road route from Mapbox Directions (or falls back to great-circle)
@@ -715,6 +750,10 @@ class FlightSearchController extends GetxController {
   }
 
   Future<void> pickAirport({required bool isFrom}) async {
+    if (isFrom) {
+      _locationResolveGen++;
+      loadingLocation.value = false;
+    }
     final result = await showModalBottomSheet<Airport>(
       context: Get.context!,
       isScrollControlled: true,

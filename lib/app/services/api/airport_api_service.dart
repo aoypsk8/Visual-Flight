@@ -48,4 +48,12 @@ class AirportApiService {
     await AirportSearchIndexStore.instance.ensureReady();
     return AirportLocalSearch.nearest(lat, lng);
   }
+
+  Future<Airport?> findByIata(String iata) async {
+    final list = await AirportSearchIndexStore.instance.byIataCodes(
+      [iata.toUpperCase()],
+      limit: 1,
+    );
+    return list.isEmpty ? null : list.first;
+  }
 }

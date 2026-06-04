@@ -9,4 +9,6 @@ class AirportRepository {
 
   Future<Airport?> findNearestAirport(double lat, double lng) =>
       _airportApi.findNearest(lat, lng);
+
+  Future<Airport?> findByIata(String iata) => _airportApi.findByIata(iata);
 }
