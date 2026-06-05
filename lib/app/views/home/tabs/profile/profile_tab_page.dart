@@ -106,6 +106,8 @@ class ProfileTabPage extends StatelessWidget {
                       ],
                     );
                   }),
+                  const SizedBox(height: 28),
+                  _ShowcaseSection(colors: colors),
                   const SizedBox(height: 40),
                   Center(
                     child: AppText(
@@ -432,6 +434,72 @@ class _TappableRow extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ─── App Showcase ─────────────────────────────────────────────────────────────
+
+class _ShowcaseSection extends StatelessWidget {
+  const _ShowcaseSection({required this.colors});
+
+  final AppTheme colors;
+
+  static const _images = [
+    'assets/showcase/Simulator Screenshot - iPad Pro 13-inch (M4) - 2026-06-05 at 09.10.23.png',
+    'assets/showcase/Simulator Screenshot - iPad Pro 13-inch (M4) - 2026-06-05 at 09.10.26.png',
+    'assets/showcase/Simulator Screenshot - iPad Pro 13-inch (M4) - 2026-06-05 at 09.10.29.png',
+    'assets/showcase/Simulator Screenshot - iPad Pro 13-inch (M4) - 2026-06-05 at 09.10.31.png',
+    'assets/showcase/Simulator Screenshot - iPad Pro 13-inch (M4) - 2026-06-05 at 09.10.33.png',
+    'assets/showcase/Simulator Screenshot - iPad Pro 13-inch (M4) - 2026-06-05 at 09.11.01.png',
+    'assets/showcase/Simulator Screenshot - iPad Pro 13-inch (M4) - 2026-06-05 at 09.11.10.png',
+    'assets/showcase/Simulator Screenshot - iPad Pro 13-inch (M4) - 2026-06-05 at 09.11.18.png',
+    'assets/showcase/Simulator Screenshot - iPad Pro 13-inch (M4) - 2026-06-05 at 09.11.22.png',
+    'assets/showcase/Simulator Screenshot - iPad Pro 13-inch (M4) - 2026-06-05 at 09.11.30.png',
+    'assets/showcase/Simulator Screenshot - iPad Pro 13-inch (M4) - 2026-06-05 at 09.11.34.png',
+    'assets/showcase/Simulator Screenshot - iPad Pro 13-inch (M4) - 2026-06-05 at 09.11.36.png',
+    'assets/showcase/Simulator Screenshot - iPad Pro 13-inch (M4) - 2026-06-05 at 09.11.40.png',
+    'assets/showcase/Simulator Screenshot - iPad Pro 13-inch (M4) - 2026-06-05 at 09.11.44.png',
+    'assets/showcase/Simulator Screenshot - iPad Pro 13-inch (M4) - 2026-06-05 at 09.11.50.png',
+    'assets/showcase/Simulator Screenshot - iPad Pro 13-inch (M4) - 2026-06-05 at 09.11.53.png',
+    'assets/showcase/Simulator Screenshot - iPad Pro 13-inch (M4) - 2026-06-05 at 09.11.55.png',
+    'assets/showcase/Simulator Screenshot - iPad Pro 13-inch (M4) - 2026-06-05 at 09.12.03.png',
+    'assets/showcase/Simulator Screenshot - iPad Pro 13-inch (M4) - 2026-06-05 at 09.12.15.png',
+    'assets/showcase/Simulator Screenshot - iPad Pro 13-inch (M4) - 2026-06-05 at 09.12.24.png',
+    'assets/showcase/Simulator Screenshot - iPad Pro 13-inch (M4) - 2026-06-05 at 09.12.26.png',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _GroupLabel('profile_showcase'.tr, colors: colors),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 250,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            itemCount: _images.length,
+            separatorBuilder: (context, index) => const SizedBox(width: 10),
+            itemBuilder: (_, i) => Container(
+              width: 187,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: colors.hair2),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(13),
+                child: Image.asset(
+                  _images[i],
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

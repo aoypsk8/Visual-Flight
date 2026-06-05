@@ -136,6 +136,7 @@
   "profile_dark_hint_on": "Easier at night",
   "profile_dark_hint_off": "Brighter during the day",
   "profile_language_hint": "English or Lao",
+  "profile_showcase": "App showcase",
 
   "picker_title": "Select airport",
   "picker_hint": "City, airport or code (min 2 chars)",
